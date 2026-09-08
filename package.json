@@ -1,0 +1,72 @@
+{
+  "name": "crs-zcode",
+  "version": "1.0.0",
+  "description": "CRS - 智能需求管理系统 ZCode 插件，从需求到测试的全流程自动化",
+  "type": "module",
+  "files": [
+    ".zcode-plugin/",
+    "skills/",
+    "commands/",
+    "hooks/",
+    "scripts/",
+    "bin/",
+    "templates/",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "keywords": [
+    "zcode",
+    "plugin",
+    "requirement-management",
+    "automation",
+    "skills"
+  ],
+  "author": "Ray",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zxc1213/crs-zcode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zxc1213/crs-zcode/issues"
+  },
+  "homepage": "https://github.com/zxc1213/crs-zcode#readme",
+  "bin": {
+    "crs-project-init": "bin/crs-project-init.js",
+    "crs-project-sync": "bin/crs-project-sync.js",
+    "crs-export": "bin/crs-export.js",
+    "kg-search": "bin/kg-cli.js",
+    "kg-stats": "bin/kg-cli.js",
+    "kg-connections": "bin/kg-cli.js",
+    "kg-recommend": "bin/kg-cli.js",
+    "kg-rebuild": "bin/kg-cli.js"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "cli-table3": "^0.6.5",
+    "fuse.js": "^7.0.0",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "chai": "^5.1.2",
+    "eslint": "^9.18.0",
+    "fs-extra": "^11.2.0",
+    "mocha": "^11.1.0",
+    "prettier": "^3.4.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "sync-version": "node scripts/sync-version.js",
+    "lint": "eslint scripts/ hooks/ bin/",
+    "lint:fix": "eslint scripts/ hooks/ bin/ --fix",
+    "format": "prettier --write \"scripts/**/*.js\" \"hooks/*.mjs\" \"bin/*.js\"",
+    "format:check": "prettier --check \"scripts/**/*.js\" \"hooks/*.mjs\" \"bin/*.js\"",
+    "test": "mocha \"tests/**/*.test.js\"",
+    "test:verbose": "mocha \"tests/**/*.test.js\" --reporter spec",
+    "prepack": "npm run sync-version",
+    "version": "npm run sync-version && git add ."
+  }
+}

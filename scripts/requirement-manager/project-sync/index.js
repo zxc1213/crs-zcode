@@ -1,0 +1,593 @@
+/**
+ * project-sync 编排器 - 协调 4 个生成器，处理触发事件
+ *
+ * 核心 API：
+ * - initializeProjectDocs(baseDir, options) - 初始化或修复 project 目录
+ * - syncOnRequirementDone(baseDir, reqId) - 单需求完成同步
+ * - syncOnBugFixed(baseDir, bugId) - Bug 修复同步（含设计变更判定）
+ * - fullResync(baseDir) - 全量重生成
+ *
+ * 设计原则：
+ * - 被动触发：不主动轮询
+ * - 幂等追加：changelog 追加，主文档按章节合并
+ * - 静默降级：失败记录日志，不影响主流程
+ */
+
+import fs from 'fs/promises';
+import path from 'path';
+import yaml from 'js-yaml';
+import { fileURLToPath } from 'url';
+
+import { scanProjectStructure } from './structure-scanner.js';
+import { aggregateRequirements, aggregateSingleRequirement, formatFeatureTableRows, formatFeatureDetails, formatBusinessTable } from './requirements-aggregator.js';
+import { summarizeDesign, summarizeSingleDesign, detectDesignChange } from './design-summarizer.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const TEMPLATES_DIR = path.resolve(__dirname, '../../../templates/project');
+
+/**
+ * 同步结果统一结构
+ */
+function newResult() {
+  return {
+    success: true,
+    created: [],
+    updated: [],
+    errors: [],
+    skipped: [],
+    stats: { durationMs: 0 },
+  };
+}
+
+/**
+ * 加载模板并替换变量
+ * @param {string} templateName - 模板文件名（含 .tpl 后缀）
+ * @param {object} vars - 变量键值对
+ * @returns {Promise<string>}
+ */
+async function loadTemplate(templateName, vars) {
+  // 模板名只取 basename 并校验不越出模板目录
+  const root = path.resolve(TEMPLATES_DIR);
+  const tplPath = path.resolve(root, path.basename(String(templateName)));
+  if (!tplPath.startsWith(root + path.sep)) {
+    return `<!-- 模板路径非法: ${templateName} -->\n# 占位文档\n\n_模板加载失败_`;
+  }
+  try {
+    const tpl = await fs.readFile(tplPath, 'utf-8');
+    let result = tpl;
+    for (const [key, val] of Object.entries(vars)) {
+      result = result.split(`\${${key}}`).join(String(val ?? ''));
+    }
+    return result;
+  } catch (_error) {
+    return `<!-- 模板缺失: ${templateName} -->\n# 占位文档\n\n_模板加载失败_`;
+  }
+}
+
+/**
+ * 安全写入文件（确保目录存在）
+ */
+async function safeWrite(filePath, content) {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, content, 'utf-8');
+}
+
+/**
+ * 检查 project 目录是否已初始化
+ * @param {string} baseDir
+ * @returns {Promise<boolean>}
+ */
+export async function isProjectInitialized(baseDir) {
+  const projectDir = path.join(baseDir, '.requirements', 'project');
+  try {
+    await fs.access(path.join(projectDir, 'meta.yaml'));
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+/**
+ * 读取 project meta.yaml
+ * @param {string} baseDir
+ * @returns {Promise<object|null>}
+ */
+async function readProjectMeta(baseDir) {
+  const metaPath = path.join(baseDir, '.requirements', 'project', 'meta.yaml');
+  try {
+    const content = await fs.readFile(metaPath, 'utf-8');
+    return yaml.load(content);
+  } catch (_error) {
+    return null;
+  }
+}
+
+/**
+ * 写入 project meta.yaml
+ */
+async function writeProjectMeta(baseDir, meta) {
+  const metaPath = path.join(baseDir, '.requirements', 'project', 'meta.yaml');
+  const content = yaml.dump(meta, { indent: 2, lineWidth: -1, noRefs: true });
+  await safeWrite(metaPath, content);
+}
+
+/**
+ * 追加 changelog 条目
+ * @param {string} baseDir
+ * @param {object} entry - { timestamp, type, title, action, affectedDocs, source }
+ */
+async function appendChangelog(baseDir, entry) {
+  const changelogPath = path.join(baseDir, '.requirements', 'project', 'changelog.md');
+  let existing = '';
+  try {
+    existing = await fs.readFile(changelogPath, 'utf-8');
+  } catch (_error) {
+    existing = '# 项目变更历史\n\n> 由 CRS 自动维护，最新条目置顶。此文件只追加不删除。\n\n---\n';
+  }
+
+  // 切分头部和正文
+  const headerEnd = existing.indexOf('\n---\n');
+  const header = headerEnd >= 0 ? existing.slice(0, headerEnd + 5) : existing;
+  const body = headerEnd >= 0 ? existing.slice(headerEnd + 5) : '';
+
+  const lines = [`\n## [${entry.timestamp}] ${entry.id || entry.action}`, '', `- **类型**: ${entry.type}`, `- **标题**: ${entry.title}`, `- **动作**: ${entry.action}`];
+  if (entry.affectedDocs?.length) {
+    lines.push(`- **影响文档**: ${entry.affectedDocs.join(', ')}`);
+  }
+  if (entry.source) {
+    lines.push(`- **来源**: ${entry.source}`);
+  }
+  if (entry.designChange !== undefined) {
+    lines.push(`- **设计变更**: ${entry.designChange ? '是' : '否'}`);
+  }
+
+  const newSection = lines.join('\n') + '\n';
+  const updated = `${header}\n${newSection}\n${body ? body.trimStart() : ''}`;
+  await safeWrite(changelogPath, updated);
+}
+
+/**
+ * 同步错误日志
+ * @param {string} baseDir
+ * @param {string} reqId
+ * @param {Error} error
+ */
+export async function logProjectSyncError(baseDir, reqId, error) {
+  const logsDir = path.join(baseDir, '.requirements', 'logs');
+  const logPath = path.join(logsDir, 'project-sync.error.log');
+  const ts = new Date().toISOString();
+  const entry = `[${ts}] reqId=${reqId || '-'} error=${error.message}\n${error.stack || ''}\n\n`;
+  try {
+    await safeWrite(logPath, entry);
+  } catch (_error) {
+    // 日志写入失败彻底静默
+  }
+}
+
+/**
+ * 获取当前 ISO8601 UTC 时间戳
+ */
+function now() {
+  return new Date().toISOString();
+}
+
+/**
+ * 更新 meta.yaml 的 sync_log 和 stats
+ */
+async function updateProjectMetaStats(baseDir, action, reqId = null) {
+  const meta = (await readProjectMeta(baseDir)) || {
+    version: 1,
+    project_name: path.basename(baseDir),
+    created: now(),
+    updated: now(),
+    stats: { total_requirements: 0, done_requirements: 0, last_synced_req: null },
+    sync_log: [],
+  };
+
+  meta.updated = now();
+  if (reqId) meta.stats.last_synced_req = reqId;
+  meta.sync_log = meta.sync_log || [];
+  meta.sync_log.unshift({
+    timestamp: meta.updated,
+    action,
+    actor: 'system',
+    reqId,
+  });
+  // 仅保留最近 10 条
+  meta.sync_log = meta.sync_log.slice(0, 10);
+
+  await writeProjectMeta(baseDir, meta);
+}
+
+/**
+ * 初始化 project 文档（生成 4 份核心文档）
+ * @param {string} baseDir
+ * @param {object} options
+ * @param {boolean} options.force - 强制重建
+ * @param {string} options.actor - 触发者（默认 system）
+ * @returns {Promise<object>} SyncResult
+ */
+export async function initializeProjectDocs(baseDir, options = {}) {
+  const result = newResult();
+  const start = Date.now();
+  const actor = options.actor || 'system';
+  const ts = now();
+
+  try {
+    const projectDir = path.join(baseDir, '.requirements', 'project');
+    const alreadyInit = await isProjectInitialized(baseDir);
+
+    if (alreadyInit && !options.force) {
+      result.skipped.push('project (already initialized)');
+      result.stats.durationMs = Date.now() - start;
+      return result;
+    }
+
+    // 备份（force 模式下）
+    if (alreadyInit && options.force) {
+      const backupDir = `${projectDir}.bak`;
+      try {
+        await fs.rm(backupDir, { recursive: true, force: true });
+        await fs.rename(projectDir, backupDir);
+      } catch (_error) {
+        // 备份失败继续
+      }
+    }
+
+    await fs.mkdir(projectDir, { recursive: true });
+
+    // 1. 扫描项目结构
+    const structure = await scanProjectStructure(baseDir);
+
+    // 2. 聚合需求
+    const aggregated = await aggregateRequirements(baseDir, { onlyDone: true });
+
+    // 3. 提炼设计
+    const designSummary = await summarizeDesign(
+      baseDir,
+      aggregated.all.map((r) => ({ id: r.id, type: r.type }))
+    );
+
+    // 4. 渲染模板
+    const commonVars = {
+      UPDATED_AT: ts,
+      CREATED_AT: ts,
+      PROJECT_NAME: structure.packageInfo.name,
+      PROJECT_DESCRIPTION: structure.description,
+      PROJECT_ENTRY: structure.packageInfo.main,
+      PROJECT_VERSION: structure.packageInfo.version,
+      ACTOR: actor,
+    };
+
+    const structureDoc = await loadTemplate('project-structure.md.tpl', {
+      ...commonVars,
+      DIRECTORY_TREE: structure.tree,
+      MODULES_TABLE: structure.modulesTable,
+      DEPENDENCIES_LIST: structure.dependenciesList,
+    });
+    await safeWrite(path.join(projectDir, 'project-structure.md'), structureDoc);
+    result.created.push('project-structure.md');
+
+    const businessDoc = await loadTemplate('business-requirements.md.tpl', {
+      ...commonVars,
+      BUSINESS_GOALS: deriveBusinessGoals(structure, aggregated),
+      USER_ROLES: deriveUserRoles(),
+      BUSINESS_FLOWS: '_待补充（基于已完成需求汇总）_',
+      BUSINESS_REQUIREMENTS_TABLE: formatBusinessTable(aggregated.all),
+    });
+    await safeWrite(path.join(projectDir, 'business-requirements.md'), businessDoc);
+    result.created.push('business-requirements.md');
+
+    const functionalDoc = await loadTemplate('functional-requirements.md.tpl', {
+      ...commonVars,
+      TOTAL_FEATURES: aggregated.features.length,
+      FEATURE_TABLE_ROWS: formatFeatureTableRows(aggregated.features),
+      FEATURE_DETAILS: formatFeatureDetails(aggregated.features),
+    });
+    await safeWrite(path.join(projectDir, 'functional-requirements.md'), functionalDoc);
+    result.created.push('functional-requirements.md');
+
+    const designDoc = await loadTemplate('functional-design.md.tpl', {
+      ...commonVars,
+      ARCHITECTURE_SUMMARY: designSummary.architectureSummary,
+      COMPONENTS_SUMMARY: designSummary.componentsSummary,
+      DATAFLOW_SUMMARY: designSummary.dataflowSummary,
+      DECISIONS_SUMMARY: designSummary.decisionsSummary,
+    });
+    await safeWrite(path.join(projectDir, 'functional-design.md'), designDoc);
+    result.created.push('functional-design.md');
+
+    // 5. changelog（仅初始化时）
+    if (!alreadyInit) {
+      const changelogDoc = await loadTemplate('changelog.md.tpl', commonVars);
+      await safeWrite(path.join(projectDir, 'changelog.md'), changelogDoc);
+      result.created.push('changelog.md');
+    }
+
+    // 6. meta.yaml
+    const metaContent = await loadTemplate('meta.yaml.tpl', commonVars);
+    await safeWrite(path.join(projectDir, 'meta.yaml'), metaContent);
+    if (!alreadyInit) result.created.push('meta.yaml');
+    else result.updated.push('meta.yaml');
+
+    // 7. 更新统计
+    await updateProjectMetaStats(baseDir, 'initialize', null);
+  } catch (error) {
+    result.success = false;
+    result.errors.push(error.message);
+    await logProjectSyncError(baseDir, null, error);
+  }
+
+  result.stats.durationMs = Date.now() - start;
+  return result;
+}
+
+/**
+ * 推导业务目标（基于 package.json description 和需求聚合）
+ */
+function deriveBusinessGoals(structure, aggregated) {
+  const goals = [];
+  if (structure.description && !structure.description.startsWith('(')) {
+    goals.push(`- ${structure.description}`);
+  }
+  if (aggregated.total > 0) {
+    goals.push(`- 已交付 ${aggregated.total} 个需求（功能 ${aggregated.features.length}、缺陷 ${aggregated.bugs.length}、重构 ${aggregated.refactors.length}）`);
+  }
+  if (!goals.length) goals.push('- _待补充_');
+  return goals.join('\n');
+}
+
+/**
+ * 推导用户角色（默认）
+ */
+function deriveUserRoles() {
+  return `- **开发者**: 通过 CRS 管理需求和实现
+- **AI 助手（Claude Code）**: 跨会话恢复项目上下文
+- **项目维护者**: 通过 project 文档了解项目全貌`;
+}
+
+/**
+ * 单需求完成后同步
+ * @param {string} baseDir
+ * @param {string} reqId
+ * @returns {Promise<object>} SyncResult
+ */
+export async function syncOnRequirementDone(baseDir, reqId) {
+  const result = newResult();
+  const start = Date.now();
+  const ts = now();
+
+  try {
+    // project 未初始化则先初始化
+    if (!(await isProjectInitialized(baseDir))) {
+      await initializeProjectDocs(baseDir);
+    }
+
+    const single = await aggregateSingleRequirement(baseDir, reqId);
+    if (!single) {
+      result.success = false;
+      result.errors.push(`E_PROJ_REQ_NOT_FOUND: ${reqId}`);
+      result.stats.durationMs = Date.now() - start;
+      return result;
+    }
+
+    const affectedDocs = [];
+
+    // 根据类型路由
+    if (single.type === 'feature' || single.type === 'adjustment') {
+      // 更新 functional-requirements.md（追加模式）
+      await appendToSection(baseDir, 'functional-requirements.md', '## 功能详情', formatFeatureDetails([single]));
+      affectedDocs.push('functional-requirements.md');
+
+      // feature 类型也更新 business
+      if (single.type === 'feature') {
+        await appendToSection(baseDir, 'business-requirements.md', '## 业务需求清单', `\n### ${single.title}\n\n- **ID**: \`${single.id}\`\n- **摘要**: ${single.summary || '(无摘要)'}\n`);
+        affectedDocs.push('business-requirements.md');
+      }
+    }
+
+    if (single.type === 'refactor' || single.type === 'feature') {
+      // 提取设计要点
+      const singleDesign = await summarizeSingleDesign(baseDir, reqId);
+      if (singleDesign && singleDesign.sections.length) {
+        const designText = singleDesign.sections.map((s) => `### 来自 \`${reqId}\` — ${s.title}\n\n${s.body.slice(0, 500)}${s.body.length > 500 ? '...' : ''}\n`).join('\n---\n\n');
+        await appendToSection(baseDir, 'functional-design.md', '## 关键设计决策', designText);
+        affectedDocs.push('functional-design.md');
+      }
+    }
+
+    // 追加 changelog
+    await appendChangelog(baseDir, {
+      timestamp: ts,
+      id: reqId,
+      type: single.type,
+      title: single.title,
+      action: 'requirement-done',
+      affectedDocs,
+      source: reqId,
+    });
+
+    // 更新 meta
+    await updateProjectMetaStats(baseDir, 'requirement-done', reqId);
+
+    result.updated.push(...affectedDocs);
+  } catch (error) {
+    result.success = false;
+    result.errors.push(error.message);
+    await logProjectSyncError(baseDir, reqId, error);
+  }
+
+  result.stats.durationMs = Date.now() - start;
+  return result;
+}
+
+/**
+ * Bug 修复后同步
+ * @param {string} baseDir
+ * @param {string} bugId
+ * @returns {Promise<object>} SyncResult
+ */
+export async function syncOnBugFixed(baseDir, bugId) {
+  const result = newResult();
+  const start = Date.now();
+  const ts = now();
+
+  try {
+    if (!(await isProjectInitialized(baseDir))) {
+      await initializeProjectDocs(baseDir);
+    }
+
+    const single = await aggregateSingleRequirement(baseDir, bugId);
+    if (!single) {
+      result.success = false;
+      result.errors.push(`E_PROJ_REQ_NOT_FOUND: ${bugId}`);
+      result.stats.durationMs = Date.now() - start;
+      return result;
+    }
+
+    // 检测设计变更
+    const prefix = bugId.split('-')[0];
+    const prefixToType = { BUG: 'bug', DEBT: 'tech-debt' };
+    const type = prefixToType[prefix] || 'bug';
+    const typeDir = type === 'tech-debt' ? 'tech-debt' : 'bugs';
+    const bugDir = path.join(baseDir, '.requirements', typeDir, bugId);
+
+    const { hasDesignChange, reason } = await detectDesignChange(bugDir);
+    const affectedDocs = [];
+
+    if (hasDesignChange) {
+      // 同步到 functional-design.md
+      const designSummary = await summarizeSingleDesign(baseDir, bugId);
+      if (designSummary && designSummary.sections.length) {
+        const designText = designSummary.sections.map((s) => `### 来自 \`${bugId}\` (Bug 设计变更) — ${s.title}\n\n${s.body.slice(0, 500)}${s.body.length > 500 ? '...' : ''}\n`).join('\n---\n\n');
+        await appendToSection(baseDir, 'functional-design.md', '## 关键设计决策', designText);
+        affectedDocs.push('functional-design.md');
+      } else {
+        // 即使没提取到 section，也追加一条占位
+        await appendToSection(baseDir, 'functional-design.md', '## 关键设计决策', `### 来自 \`${bugId}\` (Bug 设计变更)\n\n_详见 [原始 Bug 文档](../bugs/${bugId}/spec/decisions.md)_\n`);
+        affectedDocs.push('functional-design.md');
+      }
+    } else {
+      result.skipped.push('design-doc (no design_change)');
+    }
+
+    // 追加 changelog（必加）
+    await appendChangelog(baseDir, {
+      timestamp: ts,
+      id: bugId,
+      type: single.type,
+      title: single.title,
+      action: 'bug-fixed',
+      affectedDocs,
+      source: bugId,
+      designChange: hasDesignChange,
+    });
+
+    await updateProjectMetaStats(baseDir, 'bug-fixed', bugId);
+
+    result.updated.push(...affectedDocs);
+  } catch (error) {
+    result.success = false;
+    result.errors.push(error.message);
+    await logProjectSyncError(baseDir, bugId, error);
+  }
+
+  result.stats.durationMs = Date.now() - start;
+  return result;
+}
+
+/**
+ * 全量重生成（保留 changelog）
+ * @param {string} baseDir
+ * @returns {Promise<object>} SyncResult
+ */
+export async function fullResync(baseDir) {
+  const result = newResult();
+  const start = Date.now();
+
+  try {
+    // 全量重生成 = force 初始化（会备份 + 重建）
+    // 注意：changelog 由 force 模式保留（不会被覆盖）
+    const changelogPath = path.join(baseDir, '.requirements', 'project', 'changelog.md');
+    let changelogBackup = null;
+    try {
+      changelogBackup = await fs.readFile(changelogPath, 'utf-8');
+    } catch (_error) {
+      // 无 changelog 也继续
+    }
+
+    const initResult = await initializeProjectDocs(baseDir, { force: true });
+    result.errors.push(...initResult.errors);
+    result.created.push(...initResult.created);
+    result.updated.push(...initResult.updated);
+
+    // 恢复 changelog
+    if (changelogBackup) {
+      await fs.writeFile(changelogPath, changelogBackup, 'utf-8');
+      result.updated.push('changelog.md (restored)');
+    }
+
+    // 追加本次 resync 记录
+    await appendChangelog(baseDir, {
+      timestamp: now(),
+      action: 'full-resync',
+      type: 'system',
+      title: '全量重生成',
+      affectedDocs: ['project-structure.md', 'business-requirements.md', 'functional-requirements.md', 'functional-design.md'],
+    });
+
+    await updateProjectMetaStats(baseDir, 'full-resync', null);
+  } catch (error) {
+    result.success = false;
+    result.errors.push(error.message);
+    await logProjectSyncError(baseDir, null, error);
+  }
+
+  result.stats.durationMs = Date.now() - start;
+  return result;
+}
+
+/**
+ * 在指定 H2 章节后追加内容（幂等：基于 ID 去重）
+ * @param {string} baseDir
+ * @param {string} docFile - 文档文件名
+ * @param {string} sectionHeader - H2 章节（如 "## 功能详情"）
+ * @param {string} addition - 要追加的内容
+ */
+async function appendToSection(baseDir, docFile, sectionHeader, addition) {
+  const docPath = path.join(baseDir, '.requirements', 'project', docFile);
+  let content = '';
+  try {
+    content = await fs.readFile(docPath, 'utf-8');
+  } catch (_error) {
+    content = `# ${docFile.replace('.md', '')}\n\n${sectionHeader}\n\n`;
+  }
+
+  // 提取 addition 中的 ID 进行幂等检查（捕获完整 ID，去除反引号）
+  const idMatch = addition.match(/`((?:FEAT|BUG|QUES|ADJU|REF|DEBT)-[^`]+)`/);
+  if (idMatch) {
+    const reqId = idMatch[1];
+    if (content.includes(`\`${reqId}\``)) {
+      return; // 已存在，跳过
+    }
+  }
+
+  const sectionStart = content.indexOf(sectionHeader);
+  if (sectionStart < 0) {
+    // 章节不存在，追加到末尾
+    content = `${content.trimEnd()}\n\n${sectionHeader}\n\n${addition}\n`;
+  } else {
+    const insertPos = sectionStart + sectionHeader.length;
+    content = content.slice(0, insertPos) + `\n${addition}\n` + content.slice(insertPos);
+  }
+  await fs.writeFile(docPath, content, 'utf-8');
+}
+
+export default {
+  initializeProjectDocs,
+  syncOnRequirementDone,
+  syncOnBugFixed,
+  fullResync,
+  isProjectInitialized,
+  logProjectSyncError,
+};

@@ -1,0 +1,29 @@
+{
+  "storage": {
+    "directory": ".conversations",
+    "maxAge": "90d",
+    "maxSize": "100m"
+  },
+  "formatting": {
+    "dateTimeFormat": "YYYY-MM-DD HH:mm:ss",
+    "timezone": "local"
+  },
+  "search": {
+    "threshold": 0.3,
+    "limit": 10,
+    "keys": [
+      { "name": "messages.content", "weight": 0.5 },
+      { "name": "metadata.tags", "weight": 0.3 },
+      { "name": "metadata.summary", "weight": 0.2 }
+    ]
+  },
+  "metadata": {
+    "autoTag": true,
+    "autoSummarize": false,
+    "defaultStatus": "active"
+  },
+  "hooks": {
+    "enabled": true,
+    "timeout": 5000
+  }
+}

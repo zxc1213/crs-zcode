@@ -17,12 +17,14 @@ CRS（ClaudeReqSys）的 **ZCode 插件版**，从 [zxc1213/crs-plugin](https://
 
 ### Marketplace 安装（推荐）
 
+本仓库同时是插件市场（单仓库模式，仓库根 `marketplace.json` 的 `source: "."` 指向自身）：
+
 ```bash
 # 1. 添加 Marketplace
 /plugin marketplace add zxc1213/crs-zcode
 
 # 2. 安装插件
-/plugin install crs-zcode
+/plugin install crs@crs-zcode
 ```
 
 ### 本地开发安装

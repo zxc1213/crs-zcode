@@ -1,0 +1,47 @@
+{
+  "name": "crs-zcode",
+  "description": "CRS marketplace: intelligent requirement management system for ZCode.",
+  "description_i18n": {
+    "en": "CRS marketplace: intelligent requirement management system for ZCode.",
+    "zh-CN": "CRS 插件市场：智能需求管理系统，为 ZCode 提供从需求到测试的全流程管理能力。"
+  },
+  "owner": {
+    "name": "Ray",
+    "url": "https://github.com/zxc1213"
+  },
+  "plugins": [
+    {
+      "name": "crs",
+      "version": "1.0.0",
+      "description": "CRS - Intelligent requirement management system, full-flow automation from requirement to test.",
+      "description_i18n": {
+        "en": "CRS - Intelligent requirement management system, full-flow automation from requirement to test.",
+        "zh-CN": "CRS 智能需求管理系统：5 阶段文档流程、阶段守卫 Hook、质量门禁、优先级评估、知识图谱与 HTML 报告导出。"
+      },
+      "category": "developer-tools",
+      "tags": [
+        "requirements",
+        "project-management",
+        "documentation",
+        "testing",
+        "knowledge-graph",
+        "zcode"
+      ],
+      "source": ".",
+      "homepage": "https://github.com/zxc1213/crs-zcode",
+      "repository": "https://github.com/zxc1213/crs-zcode",
+      "license": "MIT",
+      "author": {
+        "name": "Ray"
+      },
+      "keywords": [
+        "requirements",
+        "skills",
+        "automation",
+        "tdd",
+        "knowledge-graph",
+        "zcode"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+# 依赖
+node_modules/
+
+# 需求数据
+.requirements/
+
+# 日志
+*.log
+npm-debug.log*
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 备份文件
+*.bak
+*.backup
+
+# 测试覆盖率
+coverage/
+.nyc_output/
+
+# 临时文件
+.tmp/
+.tmp-*/
+temp/
+.test-workflow/
+
+# CRS 运行时目录（自动生成）
+.crs/
+
+# ZRead 工作目录（自动生成）
+.zread/
+
+# 对话记录（自动生成）
+.conversations/
+
+# Mimosa 运行时目录
+.mimosa/

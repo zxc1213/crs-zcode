@@ -1,0 +1,47 @@
+{
+  "description": "CRS hooks: active-requirement context injection, phase gate guard, execution summary.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          {
+            "type": "process",
+            "command": "node",
+            "args": ["${ZCODE_PLUGIN_ROOT}/hooks/session-start.mjs"],
+            "timeoutMs": 5000,
+            "statusMessage": "crs: checking active requirement…"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|Bash",
+        "hooks": [
+          {
+            "type": "process",
+            "command": "node",
+            "args": ["${ZCODE_PLUGIN_ROOT}/hooks/post-tool-use.mjs"],
+            "timeoutMs": 10000,
+            "statusMessage": "crs: phase guard + execution log…"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "process",
+            "command": "node",
+            "args": ["${ZCODE_PLUGIN_ROOT}/hooks/stop.mjs"],
+            "timeoutMs": 10000,
+            "statusMessage": "crs: syncing requirement documents…"
+          }
+        ]
+      }
+    ]
+  }
+}

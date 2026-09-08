@@ -1,0 +1,8 @@
+node_modules/
+dist/
+build/
+.requirements/
+coverage/
+*.min.js
+package-lock.json
+.vitest/

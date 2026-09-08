@@ -26,13 +26,19 @@ describe('Version Sync (manifest 版本同步验证)', () => {
     expect(expectedVersion).to.match(/^\d+\.\d+\.\d+/);
   });
 
-  const manifests = [{ path: '.zcode-plugin/plugin.json', platform: 'ZCode' }];
+  const manifests = [
+    { path: '.zcode-plugin/plugin.json', platform: 'ZCode' },
+    { path: 'marketplace.json', platform: 'Marketplace listing', versionKey: 'plugins[0].version' },
+  ];
 
-  manifests.forEach(({ path, platform }) => {
+  manifests.forEach(({ path, platform, versionKey }) => {
     it(`${platform} ${path} 版本与 package.json 一致 (${expectedVersion})`, () => {
       const m = readJson(path);
       expect(m, `${path} must exist`).to.not.equal(null);
-      expect(m.version, `${platform} version mismatch`).to.equal(expectedVersion);
+      const v = versionKey
+        ? m.plugins[0].version
+        : m.version;
+      expect(v, `${platform} version mismatch`).to.equal(expectedVersion);
     });
   });
 
@@ -51,12 +57,15 @@ describe('sync-version.js 脚本完整性', () => {
     expect(existsSync(scriptPath), 'scripts/sync-version.js must exist').to.equal(true);
   });
 
-  it('脚本中包含 zcode manifest 目标', () => {
+  it('脚本中包含全部 manifest 目标', () => {
     const scriptPath = join(rootDir, 'scripts', 'sync-version.js');
     const content = readFileSync(scriptPath, 'utf-8');
 
     expect(content, 'sync-version.js must reference .zcode-plugin/plugin.json').to.include(
       '.zcode-plugin/plugin.json',
+    );
+    expect(content, 'sync-version.js must reference marketplace.json').to.include(
+      'marketplace.json',
     );
   });
 

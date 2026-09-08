@@ -6,7 +6,8 @@
  * so the version number stays consistent and avoids drift.
  *
  * Targets:
- *   - .zcode-plugin/plugin.json  (ZCode)
+ *   - .zcode-plugin/plugin.json  (ZCode plugin manifest)
+ *   - marketplace.json           (marketplace listing, plugins[0].version)
  */
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -19,7 +20,10 @@ const rootDir = join(__dirname, '..');
 const packageJson = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf-8'));
 const version = packageJson.version;
 
-const manifests = [{ path: '.zcode-plugin/plugin.json', key: 'version' }];
+const manifests = [
+  { path: '.zcode-plugin/plugin.json', key: 'version' },
+  { path: 'marketplace.json', key: 'plugins.0.version', arrayIndex: true },
+];
 
 let updated = 0;
 let skipped = 0;
@@ -36,9 +40,14 @@ manifests.forEach(({ path, key }) => {
 
   const manifest = JSON.parse(readFileSync(filePath, 'utf-8'));
 
-  if (manifest[key] !== version) {
-    const oldVersion = manifest[key];
-    manifest[key] = version;
+  // resolve dotted key, e.g. plugins.0.version
+  const segs = String(key).split('.');
+  const holder = segs.slice(0, -1).reduce((obj, seg) => obj[seg], manifest);
+  const leaf = segs[segs.length - 1];
+
+  if (holder[leaf] !== version) {
+    const oldVersion = holder[leaf];
+    holder[leaf] = version;
     writeFileSync(filePath, JSON.stringify(manifest, null, 2) + '\n');
     console.log(`Updated ${path}: ${oldVersion} -> ${version}`);
     updated++;

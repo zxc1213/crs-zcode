@@ -318,6 +318,22 @@ export async function initializeProjectDocs(baseDir, options = {}) {
     if (!alreadyInit) result.created.push('meta.yaml');
     else result.updated.push('meta.yaml');
 
+    // 6.5 文档地图：自动登记宿主项目外部文档（README/docs 等）
+    try {
+      const { autoRegisterScanned } = await import('./docs-map.js');
+      const { registered } = await autoRegisterScanned(baseDir);
+      if (registered > 0) {
+        result.created.push(`docs-map.yaml (${registered} docs)`);
+        await recordEvent(baseDir, {
+          type: 'docs_registered',
+          title: '文档地图初始化',
+          summary: `自动登记 ${registered} 份宿主项目文档`,
+        });
+      }
+    } catch (_docsMapError) {
+      // 文档地图失败不影响初始化
+    }
+
     // 7. 更新统计
     await updateProjectMetaStats(baseDir, 'initialize', null);
   } catch (error) {

@@ -4,13 +4,15 @@
  * crs-project-sync - 手动触发 project 文档同步
  *
  * 用法：
- *   crs-project-sync [--full] [--req-id <ID>] [--change <level> --reason <text>] [--help]
+ *   crs-project-sync [--full] [--req-id <ID>] [--change <level> --reason <text>] [--scan-docs] [--help]
  *
  * 选项：
  *   --full            全量重生成（覆盖现有 4 份文档，保留 changelog）
  *   --req-id <ID>     仅同步指定需求（增量）
  *   --change <level>  需求变更同步（small|medium|large，需配合 --req-id 与 --reason）
  *   --reason <text>   变更原因（--change 模式必填）
+ *   --scan-docs       扫描并登记宿主项目外部文档到 docs-map（含漂移检测报告）
+ *   --doc-reviewed <path> 标记某外部文档已复核（更新 last_reviewed，消除过期告警）
  *   --help            显示帮助
  */
 
@@ -33,12 +35,16 @@ crs-project-sync - 同步项目文档
   --change <level>  需求变更同步（small|medium|large；需配合 --req-id 与 --reason，
                     已聚合的项目文档区块将被替换更新，并记录时间线事件）
   --reason <text>   变更原因（--change 模式必填）
+  --scan-docs       扫描并登记宿主项目外部文档（README/docs 等）到 docs-map，
+                    同时输出漂移检测报告（过期/未确认/未登记）
+  --doc-reviewed <path> 标记外部文档已复核（内容确认准确，消除过期告警）
   --help            显示此帮助信息
 
 示例:
   crs-project-sync --full                     # 全量重生成
   crs-project-sync --req-id FEAT-20260613-001 # 同步指定需求
   crs-project-sync --req-id FEAT-20260613-001 --change medium --reason "导出格式改为 CSV"
+  crs-project-sync --scan-docs                # 登记外部文档 + 漂移检测
 `);
 }
 
@@ -71,8 +77,53 @@ async function main() {
 
   const changeLevel = readFlagValue(args, '--change');
   const reason = readFlagValue(args, '--reason');
+  const scanDocs = args.includes('--scan-docs');
+  const docReviewed = readFlagValue(args, '--doc-reviewed');
 
   const baseDir = process.cwd();
+
+  // --doc-reviewed 独立模式：标记外部文档已复核
+  if (docReviewed) {
+    const docsMap = await import('../scripts/requirement-manager/project-sync/docs-map.js');
+    const result = await docsMap.markReviewed(baseDir, docReviewed);
+    if (result.success) {
+      console.log(`✅ ${result.message}`);
+      process.exit(0);
+    } else {
+      console.error(`❌ ${result.message}`);
+      process.exit(1);
+    }
+  }
+
+  // --scan-docs 独立模式：登记外部文档 + 漂移检测
+  if (scanDocs) {
+    const docsMap = await import('../scripts/requirement-manager/project-sync/docs-map.js');
+    const suggestions = await docsMap.scanExternalDocs(baseDir);
+    let registered = 0;
+    for (const suggestion of suggestions) {
+      const r = await docsMap.registerDoc(baseDir, { ...suggestion, source: 'auto-scan' });
+      if (r.success) registered++;
+    }
+    const drift = await docsMap.checkDrift(baseDir);
+
+    console.log(`🗺 文档地图（${drift.total} 份已登记，本次新登记 ${registered} 份）\n`);
+    if (drift.stale.length) {
+      console.log(`⚠️  可能过期（登记后又修改过，未确认）:`);
+      drift.stale.forEach((d) => console.log(`   - ${d.path} (mtime ${d.mtime})`));
+    }
+    if (drift.unconfirmed.length) {
+      console.log(`❓ 未确认过内容准确性:`);
+      drift.unconfirmed.forEach((d) => console.log(`   - ${d.path} (${d.role})`));
+    }
+    if (!drift.stale.length && !drift.unconfirmed.length) {
+      console.log(`✅ 已登记文档无漂移`);
+    }
+    if (suggestions.length) {
+      console.log(`\n📄 本次自动登记的候选文档:`);
+      suggestions.forEach((d) => console.log(`   - ${d.path} (猜测角色: ${d.role}/${d.sync_on})`));
+    }
+    process.exit(0);
+  }
 
   const { exists } = await import('../scripts/requirement-manager/utils/storage.js');
   const reqsExists = await exists(path.join(baseDir, '.requirements'));

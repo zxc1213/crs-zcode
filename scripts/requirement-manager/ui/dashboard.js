@@ -46,6 +46,8 @@ export class Dashboard {
     this.showActive(active);
 
     await this.showRecent();
+
+    await this.showDocsMap();
   }
 
   /**
@@ -198,6 +200,35 @@ export class Dashboard {
     });
 
     return allReqs.slice(0, limit);
+  }
+
+  /**
+   * 显示文档地图漂移告警（宿主项目外部文档纳管状态）
+   */
+  async showDocsMap() {
+    console.log(chalk.cyan('🗺 文档地图'));
+    try {
+      const { checkDrift } = await import('../project-sync/docs-map.js');
+      const drift = await checkDrift(this.baseDir);
+
+      if (drift.total === 0) {
+        console.log(chalk.gray('  未登记外部文档（运行 crs-project-sync --scan-docs 自动登记 README/docs）'));
+      } else {
+        if (drift.stale.length) {
+          const paths = drift.stale.slice(0, 3).map((d) => d.path).join(', ');
+          console.log(chalk.yellow(`  ⚠️  ${drift.stale.length} 份可能过期: ${paths}${drift.stale.length > 3 ? ' ...' : ''}`));
+        }
+        if (drift.unconfirmed.length) {
+          console.log(chalk.gray(`  ❓ ${drift.unconfirmed.length} 份内容未确认过`));
+        }
+        if (!drift.stale.length && !drift.unconfirmed.length) {
+          console.log(chalk.green(`  ✅ ${drift.total} 份文档无漂移`));
+        }
+      }
+    } catch (_error) {
+      console.log(chalk.gray('  文档地图不可用'));
+    }
+    console.log('');
   }
 
   /**

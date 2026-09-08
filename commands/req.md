@@ -117,6 +117,11 @@ description: 智能需求管理统一入口 - 引导式创建需求、查询状�
    node "$ZCODE_PLUGIN_ROOT/scripts/requirement-manager/index.js" event --type lesson_saved --id <需求ID> --title "<lesson主题>" --summary "<一句话教训>"
    ```
 5. lessons 会在此后每次创建相关需求时被自动检索（阶段 1）——这就是经验的复利
+6. **外部文档检查**（双层纳管）：读取 `.requirements/project/docs-map.yaml`，其中 `sync_on: done` 的文档（如 README）与本需求相关时，检查内容是否需要同步更新。确认/更新过的文档标记复核以消除仪表板过期告警：
+   ```bash
+   node "$ZCODE_PLUGIN_ROOT/bin/crs-project-sync.js" --doc-reviewed README.md
+   ```
+   （发现新文档时用 `--scan-docs` 自动登记）
 
 用户明确说"跳过复盘"时记录到 retro.md（一行占位）后直接关闭，不强求。
 

@@ -225,6 +225,8 @@ node "$ZCODE_PLUGIN_ROOT/scripts/requirement-manager/index.js" change --id FEAT-
 
 **注意**：spec.md 根索引的"变更历史表"只记录文档自身修订（格式调整、章节增删），需求执行变更不写那里——避免同一变更记三处的口径混乱。
 
+**外部文档同步**：读取 `.requirements/project/docs-map.yaml`，`sync_on: change` 的文档（通常是 architecture/api 类）与本变更相关时须同步更新内容。
+
 ## 重要说明
 
 **DO:**

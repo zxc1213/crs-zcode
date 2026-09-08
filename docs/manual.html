@@ -356,13 +356,15 @@ git commit -am <span class="g">"chore: release v1.0.1"</span> &amp;&amp; git pus
   <table>
     <tr><th>输入</th><th>适合</th></tr>
     <tr><td><code>/crs:req --quick 修复按钮颜色</code></td><td>10 分钟内能搞定的小改动：只建骨架，跳过深度分析</td></tr>
-    <tr><td><code>/crs:req --dashboard</code></td><td>看全局：统计、活跃需求、最近动态</td></tr>
+    <tr><td><code>/crs:req --dashboard</code></td><td>看全局：统计、活跃需求、文档地图告警</td></tr>
     <tr><td><code>/crs:req --list</code></td><td>列出所有需求及状态</td></tr>
+    <tr><td><code>/crs:req --status FEAT-xxx</code></td><td>单个需求的详情与时间</td></tr>
+    <tr><td><code>/crs:req --history 20</code></td><td>项目历史时间线：创建/变更/修复/复盘全事件（也可在 HTML 报告看全量）</td></tr>
   </table>
 
   <div class="callout">
     <b>首次使用发生了什么？</b>
-    项目还没有 .requirements/ 目录时，创建需求会自动初始化全部目录结构并告诉你创建了什么。无需手动运行任何初始化命令。
+    项目还没有 .requirements/ 目录时，创建需求会自动初始化全部目录结构（含体系化项目文档与宿主文档地图）并告诉你创建了什么。无需手动运行任何初始化命令。
   </div>
 </section>
 
@@ -426,7 +428,7 @@ git commit -am <span class="g">"chore: release v1.0.1"</span> &amp;&amp; git pus
   </div>
   <div class="cmdcard">
     <div class="cname">/crs:req-change</div>
-    <p><b>变更管理</b>。实现中途要改需求时使用：影响评估 → 更新 spec/plan → 自动触发 Gate 4 变更检查。</p>
+    <p><b>变更管理</b>。实现中途要改需求时使用：影响评估 → 更新 spec/plan → 触发 Gate 4 变更检查。变更记入需求 CHANGELOG.md 与项目时间线，已聚合的项目文档自动替换更新。</p>
   </div>
   <div class="cmdcard">
     <div class="cname">/crs:metrics</div>
@@ -439,7 +441,7 @@ git commit -am <span class="g">"chore: release v1.0.1"</span> &amp;&amp; git pus
     <tr><td><code>--feature/-f</code> · <code>--bug/-b</code> · <code>--question/-q</code> · <code>--adjust/-a</code> · <code>--refactor/-r</code></td><td>显式指定类型（不给则自动识别并确认）</td></tr>
     <tr><td><code>--quick</code></td><td>只建骨架，跳过深度分析</td></tr>
     <tr><td><code>--auto</code> / <code>--conservative</code></td><td>全自动 / 每步确认</td></tr>
-    <tr><td><code>--list</code> · <code>--active</code> · <code>--status &lt;id&gt;</code> · <code>--dashboard</code></td><td>查询</td></tr>
+    <tr><td><code>--list</code> · <code>--active</code> · <code>--status &lt;id&gt;</code> · <code>--dashboard</code> · <code>--history [N]</code></td><td>查询</td></tr>
     <tr><td><code>复盘 &lt;id&gt;</code>（对话指令）</td><td>完成复盘并关闭需求</td></tr>
   </table>
 

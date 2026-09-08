@@ -45,16 +45,34 @@ CRS 把每个需求管理为一个**需求目录**（`.requirements/<类型>/<�
 
 ```
 .requirements/features/FEAT-20260908-001-abc/
-├── meta.yaml              # 元数据（状态、优先级）
+├── meta.yaml              # 元数据（状态、优先级、完成时间）
 ├── raw.md                 # 原始描述
 ├── spec.md                # 索引 → spec/（背景/故事/设计/接口/决策）
 ├── test-cases.md          # 索引 → test-cases/（正向/异常/边界）
 ├── plan.md                # 索引 → plan/（任务/里程碑）
+├── CHANGELOG.md           # 需求执行变更记录（req-change 流程写入）
+├── retro.md               # 复盘（done 前生成）
 ├── .agent-context.md      # Agent 指引（系统生成）
 └── execution.log          # 执行日志（Hook 自动记录）
 ```
 
 需求状态生命周期：`planning → analyzed → implementing → review → done`
+
+## 项目级数据（文档体系与历史）
+
+```
+.requirements/project/
+├── business-requirements.md / functional-requirements.md / functional-design.md / project-structure.md
+│                          # 体系化项目文档（需求 done/变更时自动聚合，变更走区块替换）
+├── changelog.md           # 项目变更日志（引擎自动追加）
+├── timeline.yaml          # 统一事件账本（唯一事实源：创建/流转/变更/修复/复盘/经验）
+├── docs-map.yaml          # 宿主项目文档地图（README/docs 登记 + 漂移检测）
+└── meta.yaml              # 统计信息
+```
+
+- 任一需求变更（`/crs:req-change`）后，已聚合进项目文档的旧条目会被**替换更新**，不会滞留过期内容
+- 想看"这个项目经历过什么"：`/crs:req --history`（终端）或 HTML 报告的历史时间线
+- 宿主项目自己的 README、docs/ 由 docs-map 纳管：`node "$ZCODE_PLUGIN_ROOT/bin/crs-project-sync.js" --scan-docs` 自动登记；仪表板会提示可能过期的文档
 
 ## Hooks 自动行为
 
@@ -82,7 +100,7 @@ CRS 把每个需求管理为一个**需求目录**（`.requirements/<类型>/<�
 /crs:req-change FEAT-20260908-001-abc 调整为支持手机号登录
 ```
 
-自动评估影响、更新 spec 与 plan、触发 Gate 4 变更检查。
+自动评估影响、更新 spec 与 plan、触发 Gate 4 变更检查。变更会记入需求目录 `CHANGELOG.md` 与项目时间线，已聚合的项目文档自动替换更新。
 
 ### 排优先级
 
@@ -105,15 +123,17 @@ CRS 把每个需求管理为一个**需求目录**（`.requirements/<类型>/<�
 
 1. 生成 `retro.md`：估时 vs 实际、踩坑与解决、可复用结论
 2. 提炼通用教训到 `.requirements/_system/lessons/`（带 tags）
-3. 状态置为 done
+3. 状态置为 done（引擎自动补写完成时间，并同步项目文档 + 时间线入账）
 
 **这就是 CRS 的成长机制**：以后创建相关需求时（阶段 1），系统会自动检索 lessons 里 tagged 的历史教训供参考——踩过的坑不会踩第二次。
 
-### 查看整体进度
+### 查看整体进度与历史
 
 ```bash
-/crs:req --dashboard
-node "$ZCODE_PLUGIN_ROOT/bin/crs-export.js" -o report.html   # HTML 报告
+/crs:req --dashboard                 # 仪表板（含文档地图告警）
+/crs:req --status FEAT-20260908-001  # 单需求详情
+/crs:req --history 20                # 历史时间线（最近 20 条事件）
+node "$ZCODE_PLUGIN_ROOT/bin/crs-export.js" -o report.html   # HTML 报告（时间线/成长档案/文档地图）
 ```
 
 ## 质量门禁

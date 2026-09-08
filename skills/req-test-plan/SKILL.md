@@ -384,12 +384,12 @@ graph TD
 
 ### 步骤4: 整合测试计划
 
-**输出文件**：`.requirements/<type>/REQ-XXX/test-plan.md`
+**输出文件**：`.requirements/<type>/REQ-XXX/test-cases.md`（摘要索引）+ `test-cases/` 子目录（positive.md / negative.md / boundary.md 详细内容）
 
 **包含内容**：
 
-- 完整的测试计划文档
-- 详细的测试用例清单
+- 测试用例索引表（test-cases.md，状态列随填充更新）
+- 分类测试用例详情（test-cases/ 子目录三个文件）
 - 测试数据准备说明
 - 测试执行计划
 
@@ -539,8 +539,8 @@ graph TD
 - **test-driven-development**: 如果使用 TDD，结合本 skill
 
 **输出文件**：
-- `.requirements/<type>/REQ-XXX/test-plan.md` - 完整测试计划
-- `.requirements/<type>/REQ-XXX/test-cases.md` - 测试用例清单（可选）
+- `.requirements/<type>/REQ-XXX/test-cases.md` - 测试用例摘要索引
+- `.requirements/<type>/REQ-XXX/test-cases/{positive,negative,boundary}.md` - 分类测试用例详情
 
 ## 下一步
 

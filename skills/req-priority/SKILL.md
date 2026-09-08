@@ -128,7 +128,8 @@ priority-estimator 自动评估
 id: REQ-20260513-001
 type: feature
 title: 用户登录功能
-priority:
+priority: medium        # 基础优先级保留字符串；评估结果写入下面的 priority_detail
+priority_detail:
   level: P0
   score: 8.6
   breakdown:

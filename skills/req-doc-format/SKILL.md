@@ -479,6 +479,14 @@ test-cases.md 是测试用例的**摘要索引**，详细内容在 test-cases/ �
 
 骨架文件使用 `<!-- TODO: {说明} -->` 标记待填充区域。填充后**必须删除**对应的 TODO 注释。
 
-## 11. 变更记录约定
+## 11. 变更记录约定（三层口径）
 
-所有文档末尾的变更记录表在每次更新时追加一行，不修改已有记录。
+**第 1 层——文档自身修订**：所有文档末尾的变更记录表在每次更新时追加一行，不修改已有记录。只记录**文档内容**的修订（格式调整、章节增删、勘误），不记录需求执行变更。
+
+**第 2 层——需求执行变更**：执行中的需求变更（req-change 流程）写入需求目录下的 `CHANGELOG.md`（没有则创建），每个变更一个 `## [YYYY-MM-DD HH:mm] [小|中|大] 标题` 小节，含原因/变更内容/影响分析/决策依据。标题的级别标记供 metrics 统计使用。
+
+**第 3 层——项目级历史**：由引擎自动维护（`project/timeline.yaml` 事件账本 + `project/changelog.md`），LLM 通过 `node "$ZCODE_PLUGIN_ROOT/scripts/requirement-manager/index.js" change --id <ID> --level <small|medium|large> --reason "<原因>"` 触发入账，**不要手工编辑**这两个文件。
+
+## 12. 项目聚合文档中的需求区块
+
+`project/` 下的聚合文档（functional-requirements.md 等）中，每个需求的区块由 `<!-- crs:block:<需求ID>:start -->` / `<!-- crs:block:<需求ID>:end -->` 标记包裹，引擎据此实现"变更后替换更新"。手工编辑项目文档时**不要破坏这些标记**，需求内容变更应通过引擎的 change 命令同步，而不是手改区块。

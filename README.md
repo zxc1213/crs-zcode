@@ -28,7 +28,9 @@ CRS（ClaudeReqSys）的 **ZCode 插件版**，为 ZCode 提供从需求捕获�
 
 # 查询
 /crs:req --list                      # 所有需求
-/crs:req --dashboard                 # 仪表板
+/crs:req --dashboard                 # 仪表板（含文档地图告警）
+/crs:req --status FEAT-20260908-001  # 单需求详情
+/crs:req --history 20                # 项目历史时间线（最近 20 条事件）
 ```
 
 创建完成后直接说"开始实现"；实现完成说"复盘 <需求ID>"沉淀经验并关闭。
@@ -36,6 +38,12 @@ CRS（ClaudeReqSys）的 **ZCode 插件版**，为 ZCode 提供从需求捕获�
 ## 成长机制
 
 每次需求复盘（`retro.md`）中提炼的经验会沉淀到 `.requirements/_system/lessons/`；之后创建相关需求时自动检索注入——项目越用越懂自己。详见[用户指南](docs/USER_GUIDE.md)。
+
+## 文档体系与历史（v1.2）
+
+- **体系化项目文档**：`.requirements/project/` 聚合业务/功能/设计/结构 4 份文档 + 变更日志，需求 done 与变更时自动同步（变更走区块替换，旧内容不会滞留）
+- **统一事件账本**：`project/timeline.yaml` 记录全部历史（创建/流转/变更/修复/复盘/经验），`/crs:req --history` 或 HTML 报告查看完整时间线
+- **双层纳管**：`project/docs-map.yaml` 登记宿主项目自己的 README/docs/ 文档，漂移检测提醒过期；`crs-project-sync --scan-docs` 自动登记
 
 ## 命令（5 个）
 
@@ -55,14 +63,14 @@ CRS（ClaudeReqSys）的 **ZCode 插件版**，为 ZCode 提供从需求捕获�
 - **阶段守卫 Hook**：需求还在 planning/analyzed 时编辑项目代码，自动注入违规警告
 - **会话上下文**：SessionStart 自动报告活跃需求；Stop 自动同步文档状态并输出执行摘要
 - **知识图谱**：创建前自动检测相似需求，避免重复
-- **HTML 报告**：`node "$ZCODE_PLUGIN_ROOT/bin/crs-export.js" -o report.html` 一键导出
+- **HTML 报告**：`node "$ZCODE_PLUGIN_ROOT/bin/crs-export.js" -o report.html` 一键导出（含历史时间线、成长档案、文档地图）
 
 ## 文档
 
 - **[📖 图形化帮助手册](docs/manual.html)** — 单文件 HTML，浏览器直接打开：导航/搜索/深色模式，新手推荐从这里开始
 - [用户指南](docs/USER_GUIDE.md) — 5 阶段流程详解、需求类型、数据目录、常见场景、复盘沉淀
 - [架构说明](docs/ARCHITECTURE.md) — 模块分层、数据流、成长机制、与原版（crs-plugin）的差异
-- [演进路线图](docs/ROADMAP.md) — v1.1 引导与成长 → v1.2 引擎重构 → v1.3 生态与反馈
+- [演进路线图](docs/ROADMAP.md) — v1.1 引导与成长 → v1.2 文档体系与变更历史 → v1.3 引擎重构
 
 ## 开发
 

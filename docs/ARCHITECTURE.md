@@ -33,14 +33,17 @@
 
 | 模块 | 职责 |
 |---|---|
+| `requirement-manager/core/schema.js` | **唯一口径源**：状态词表/日期字段/类型目录/事件类型枚举，读取侧兼容旧口径 |
 | `requirement-manager/core/processor.js` | 需求创建/状态机/骨架文件生成/模板渲染 |
 | `requirement-manager/core/scheduler.js` | 执行计划与 skill 调用链生成 |
 | `requirement-manager/core/router.js` | 意图识别与路由 |
 | `requirement-manager/features/` | 安全过滤（敏感信息）、相似度检测 |
-| `requirement-manager/project-sync/` | 项目文档（changelog/结构）自动同步 |
+| `requirement-manager/project-sync/index.js` | 项目文档聚合编排（done/bug/变更同步，区块替换语义） |
+| `requirement-manager/project-sync/timeline.js` | **统一事件账本** `project/timeline.yaml`（append-only，读取容错） |
+| `requirement-manager/project-sync/docs-map.js` | **宿主文档纳管**：扫描/登记/漂移检测（只发现与提醒，不代写） |
 | `requirement-manager/utils/plan-sync.js` | plan.md 进度与 meta.yaml 状态同步 |
 | `knowledge-graph/` | Fuse.js 相似需求搜索 |
-| `export/` | `.requirements/` → 单文件 HTML 报告 |
+| `export/` | `.requirements/` → 单文件 HTML 报告（时间线/成长档案/文档地图） |
 | `metrics/` | 度量收集与导出 |
 | `sync-version.js` | package.json → 插件清单版本同步 |
 
@@ -67,15 +70,33 @@
   → 类型对话确认（自动识别，不让用户记选项）
   → 检索 _system/lessons/ 相关历史经验（成长机制）
   → Processor.create()
-      → init .requirements/（如需）
+      → init .requirements/（如需）+ 自动登记宿主文档（docs-map）
       → 相似度检测（knowledge-graph）→ 有相似则提示
       → 安全过滤（security）→ 敏感信息警告
       → 生成需求目录 + 骨架（templates/*.tpl）
+      → timeline 入账 requirement_created
   → 阶段 2-5 由 LLM 按 skill 指令执行，每阶段 Write 落盘
   → Hook 全程记录 execution.log、守卫阶段
-  → 验收后复盘：retro.md + lessons 沉淀 → status=done
+  → 验收后复盘：retro.md + lessons 沉淀（retro_completed/lesson_saved 入账）
+      → status=done（引擎补写 completed；project-sync 聚合项目文档 + 入账）
   → Stop 时 plan-sync 收尾同步
 ```
+
+## 变更同步与历史（v1.2）
+
+```
+/crs:req-change <ID> --reason "..."
+  → LLM 三问分级（small/medium/large）+ 影响分析
+  → 需求目录 CHANGELOG.md 写详细记录（第 1 层）
+  → 引擎 change 子命令：
+      → timeline.yaml 入账 requirement_changed（第 3 层，项目级）
+      → syncOnRequirementChange：已聚合的需求区块重聚合 + crs:block 标记替换更新
+      → docs-map 中 sync_on:change 的宿主文档提示同步
+```
+
+- **区块替换语义**：project 文档中每个需求区块由 `<!-- crs:block:<ID>:start/end -->` 包裹，变更后替换而非跳过；v1.2 之前的无标记旧格式按标题块定位原位迁移
+- **三层变更口径**：文档自身修订（各文档末尾变更表）/ 需求执行变更（CHANGELOG.md）/ 项目级历史（timeline.yaml + changelog.md，引擎维护）
+- **展示**：`/crs:req --history`（终端）、HTML 报告历史时间线（全量事件 + 彩色徽章）
 
 ## 成长机制（自我进化闭环）
 

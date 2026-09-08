@@ -20,13 +20,5 @@
     "tdd",
     "knowledge-graph",
     "zcode"
-  ],
-  "userConfig": {
-    "enable_conv_logger": {
-      "title": "Enable Conversation Logger",
-      "description": "Reserved for the optional conversation-logger module. Hooks for it are not mounted by default; see README to enable.",
-      "type": "boolean",
-      "default": false
-    }
-  }
+  ]
 }

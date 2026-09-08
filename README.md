@@ -16,21 +16,26 @@ CRS（ClaudeReqSys）的 **ZCode 插件版**，为 ZCode 提供从需求捕获�
 
 ## 快速上手
 
+**不知道从哪开始？直接运行 `/crs:req`（不带参数）**——显示项目状态和推荐动作，跟着走即可。
+
 ```bash
-# 创建需求（自动走完 5 阶段文档流程）
+# 创建需求（系统自动识别类型并与你确认，无需记选项）
 /crs:req 添加用户登录功能
 
 # 常用变体
-/crs:req --bug 登录页面崩溃          # Bug 修复
+/crs:req --bug 登录页面崩溃          # 显式指定类型
 /crs:req --quick 修复登录样式        # 快速模式（只建骨架，跳过深度分析）
 
 # 查询
 /crs:req --list                      # 所有需求
-/crs:req --active                    # 当前活跃需求
 /crs:req --dashboard                 # 仪表板
 ```
 
-创建完成后直接说"开始实现"，按 plan.md 执行即可；实现完成跑 `/crs:req-quality <需求ID> --verify implementation` 做验收。
+创建完成后直接说"开始实现"；实现完成说"复盘 <需求ID>"沉淀经验并关闭。
+
+## 成长机制
+
+每次需求复盘（`retro.md`）中提炼的经验会沉淀到 `.requirements/_system/lessons/`；之后创建相关需求时自动检索注入——项目越用越懂自己。详见[用户指南](docs/USER_GUIDE.md)。
 
 ## 命令（5 个）
 
@@ -54,8 +59,9 @@ CRS（ClaudeReqSys）的 **ZCode 插件版**，为 ZCode 提供从需求捕获�
 
 ## 文档
 
-- [用户指南](docs/USER_GUIDE.md) — 5 阶段流程详解、需求类型、数据目录、常见场景
-- [架构说明](docs/ARCHITECTURE.md) — 模块分层、数据流、与原版（crs-plugin）的差异
+- [用户指南](docs/USER_GUIDE.md) — 5 阶段流程详解、需求类型、数据目录、常见场景、复盘沉淀
+- [架构说明](docs/ARCHITECTURE.md) — 模块分层、数据流、成长机制、与原版（crs-plugin）的差异
+- [演进路线图](docs/ROADMAP.md) — v1.1 引导与成长 → v1.2 引擎重构 → v1.3 生态与反馈
 
 ## 开发
 

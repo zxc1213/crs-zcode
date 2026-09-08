@@ -44,6 +44,8 @@
 | `metrics/` | 度量收集与导出 |
 | `sync-version.js` | package.json → 插件清单版本同步 |
 
+已移除的死代码（v1.1）：`optimization/`（自我优化实验，~1300 行零引用）、`conversation-logger/`（与 ZCode 记忆类插件重叠）、`demo.js`。
+
 依赖（运行时）：`chalk`、`cli-table3`、`fuse.js`、`js-yaml`。引擎不依赖任何平台 API，Node >= 18 可跑。
 
 ## Hooks（hooks/）
@@ -62,6 +64,8 @@
 
 ```
 /crs:req 添加登录功能
+  → 类型对话确认（自动识别，不让用户记选项）
+  → 检索 _system/lessons/ 相关历史经验（成长机制）
   → Processor.create()
       → init .requirements/（如需）
       → 相似度检测（knowledge-graph）→ 有相似则提示
@@ -69,8 +73,21 @@
       → 生成需求目录 + 骨架（templates/*.tpl）
   → 阶段 2-5 由 LLM 按 skill 指令执行，每阶段 Write 落盘
   → Hook 全程记录 execution.log、守卫阶段
+  → 验收后复盘：retro.md + lessons 沉淀 → status=done
   → Stop 时 plan-sync 收尾同步
 ```
+
+## 成长机制（自我进化闭环）
+
+```
+需求 done → retro.md（估时/踩坑/可复用）
+                ↓ 提炼
+     _system/lessons/<topic>.md（带 tags）
+                ↓ 创建新需求时自动检索
+        相关经验注入上下文 → 影响分析决策
+```
+
+经验在项目内复利累积；跨项目共享（`~/.crs/lessons/`）规划于 v1.3（见 ROADMAP）。
 
 ## 与原版 crs-plugin 的差异
 

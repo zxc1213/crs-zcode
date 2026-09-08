@@ -111,11 +111,23 @@ describe('需求管理系统集成测试', () => {
     });
 
     it('应该处理 status 命令', async () => {
+      const setup = new RequirementManager(testDir);
+      const created = await setup.handle('实现用户登录功能');
+
       const manager = new RequirementManager(testDir);
-      const result = await manager.handle('/req --status REQ-001');
+      const result = await manager.handle(`/req --status ${created.requirement.id}`);
 
       expect(result.success).to.be.ok;
       expect(result.action).to.equal('show_status');
+      expect(result.status).to.equal('planning');
+    });
+
+    it('status 命令查询不存在的需求应返回失败', async () => {
+      const manager = new RequirementManager(testDir);
+      const result = await manager.handle('/req --status FEAT-20990101-999');
+
+      expect(result.success).to.not.be.ok;
+      expect(result.error).to.equal('requirement_not_found');
     });
   });
 

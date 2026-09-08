@@ -3,9 +3,10 @@
  */
 
 import { generate } from '../utils/id-generator.js';
-import { createRequirementDir, readMeta, writeMeta, exists } from '../utils/storage.js';
+import { readMeta, writeMeta, exists } from '../utils/storage.js';
 import { trackDocuments } from '../utils/document-tracker.js';
 import { syncPlanStatus, syncIndexTables } from '../utils/plan-sync.js';
+import { TYPE_PREFIXES, TYPE_DIRS, STATUSES, normalizeStatus } from './schema.js';
 import path from 'path';
 import fs from 'fs/promises';
 import { getKnowledgeGraph } from '../../knowledge-graph/index.js';
@@ -16,28 +17,6 @@ import { fileURLToPath } from 'url';
  */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = path.resolve(__dirname, '../../../templates');
-
-/**
- * 类型到前缀的映射
- */
-const TYPE_PREFIXES = {
-  feature: 'FEAT',
-  bug: 'BUG',
-  question: 'QUES',
-  adjustment: 'ADJU',
-  refactor: 'REF',
-};
-
-/**
- * 类型到目录的映射
- */
-const TYPE_DIRS = {
-  feature: 'features',
-  bug: 'bugs',
-  question: 'questions',
-  adjustment: 'adjustments',
-  refactor: 'refactors',
-};
 
 /**
  * 命令标志到类型的映射
@@ -359,12 +338,26 @@ planning → analyzed → implementing → review → done
       throw new Error(`Metadata not found for requirement: ${id}`);
     }
 
+    // 状态字段统一走规范口径：旧词表自动归一，未知状态直接拒绝
+    if (updates.status !== undefined) {
+      const normalized = normalizeStatus(updates.status);
+      if (!normalized) {
+        throw new Error(`Invalid status: ${updates.status} (allowed: ${STATUSES.join(', ')})`);
+      }
+      updates.status = normalized;
+    }
+
     // 更新字段
     const updatedMeta = {
       ...meta,
       ...updates,
       updatedAt: new Date().toISOString(),
     };
+
+    // 状态进入 done 时由引擎补写完成时间，不再依赖调用方自觉
+    if (updates.status === 'done' && meta.status !== 'done' && !updatedMeta.completed) {
+      updatedMeta.completed = updatedMeta.updatedAt;
+    }
 
     // 写回元数据
     await writeMeta(this.baseDir, reqPath, updatedMeta);
@@ -471,6 +464,11 @@ planning → analyzed → implementing → review → done
     // 如果索引中有，直接返回
     if (this.index.has(id)) {
       return this.index.get(id);
+    }
+
+    // ID 只允许 字母/数字/短横线，拒绝路径片段（防路径穿越）
+    if (typeof id !== 'string' || !/^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$/.test(id)) {
+      return null;
     }
 
     // 否则，搜索文件系统

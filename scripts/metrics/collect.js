@@ -8,6 +8,7 @@
 import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
+import { TYPE_DIRS, normalizeStatus } from '../requirement-manager/core/schema.js';
 
 const BASE_DIR = process.cwd();
 const REQUIREMENTS_DIR = path.join(BASE_DIR, '.requirements');
@@ -50,7 +51,7 @@ function loadMetricsData() {
     metrics: {
       cycle_time: [],
       rework_rate: [],
-      quality_gate_pass_rate: [],
+      change_frequency: [],
       completion_rate: [],
       user_satisfaction: [],
     },
@@ -71,13 +72,12 @@ function saveMetricsData(data) {
 }
 
 /**
- * 扫描所有需求目录
+ * 扫描所有需求目录（目录名与状态口径统一走 core/schema.js）
  */
 function scanRequirements() {
-  const types = ['features', 'bugs', 'questions', 'adjustments', 'refactorings'];
   const requirements = [];
 
-  for (const type of types) {
+  for (const type of Object.values(TYPE_DIRS)) {
     const typeDir = path.join(REQUIREMENTS_DIR, type);
     if (!fs.existsSync(typeDir)) continue;
 
@@ -94,6 +94,7 @@ function scanRequirements() {
         try {
           const metaContent = fs.readFileSync(metaFile, 'utf8');
           const meta = yaml.load(metaContent);
+          meta.status = normalizeStatus(meta.status) || 'planning';
 
           requirements.push({
             id: reqId,
@@ -118,17 +119,17 @@ function collectEfficiencyMetrics(requirements) {
   const now = new Date().toISOString().split('T')[0];
   const metrics = [];
 
-  // 需求交付周期
-  const completedReqs = requirements.filter((r) => r.meta.status === 'completed' || r.meta.status === 'testing');
+  // 需求交付周期：created → completed（缺 completed 时回退 updatedAt）
+  const completedReqs = requirements.filter((r) => r.meta.status === 'done');
 
   if (completedReqs.length > 0) {
     const cycleTimes = completedReqs
       .map((r) => {
-        const created = new Date(r.meta.created_at);
-        const updated = new Date(r.meta.updated_at);
-        return (updated - created) / (1000 * 60 * 60 * 24); // 天数
+        const created = new Date(r.meta.created || r.meta.createdAt || 0);
+        const end = new Date(r.meta.completed || r.meta.updatedAt || 0);
+        return (end - created) / (1000 * 60 * 60 * 24); // 天数
       })
-      .filter((t) => t > 0 && t < 365); // 过滤异常值
+      .filter((t) => Number.isFinite(t) && t >= 0 && t < 365); // 过滤异常值
 
     if (cycleTimes.length > 0) {
       const avgCycleTime = cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length;
@@ -152,10 +153,15 @@ function collectQualityMetrics(requirements) {
   const now = new Date().toISOString().split('T')[0];
   const metrics = [];
 
-  // 返工率
+  // 返工率：执行中发生过变更（需求目录存在含变更条目的 CHANGELOG.md）的需求占比
   const allReqs = requirements;
   if (allReqs.length > 0) {
-    const reworkedCount = allReqs.filter((r) => r.meta.rework_count && r.meta.rework_count > 0).length;
+    const reworkedCount = allReqs.filter((r) => {
+      const changelogFile = path.join(r.path, 'CHANGELOG.md');
+      if (!fs.existsSync(changelogFile)) return false;
+      const content = fs.readFileSync(changelogFile, 'utf8');
+      return /^##\s/m.test(content);
+    }).length;
 
     const reworkRate = reworkedCount / allReqs.length;
     metrics.push({
@@ -164,20 +170,11 @@ function collectQualityMetrics(requirements) {
       value: Number(reworkRate.toFixed(3)),
       total: allReqs.length,
       reworked: reworkedCount,
-      details: `${reworkedCount}/${allReqs.length} 需求有返工记录`,
+      details: `${reworkedCount}/${allReqs.length} 需求有变更记录`,
     });
   }
 
-  // 质量门禁通过率（需要从实际检查结果中统计）
-  // 这里使用模拟数据，实际应该从 quality-gates 的执行记录中读取
-  metrics.push({
-    date: now,
-    metric: 'quality_gate_pass_rate',
-    value: 0.94, // 模拟数据
-    passed: 47,
-    total: 50,
-    details: '基于最近质量门禁检查结果',
-  });
+  // 质量门禁通过率：引擎不落门禁执行记录，无法真实统计，宁缺毋假（v1.2 移除模拟值）
 
   return metrics;
 }
@@ -189,29 +186,30 @@ function collectChangeMetrics(requirements) {
   const now = new Date().toISOString().split('T')[0];
   const metrics = [];
 
-  // 变更频率
-  const activeReqs = requirements.filter((r) => ['in_progress', 'testing'].includes(r.meta.status));
+  // 变更频率：统计有变更记录的需求（不限于活跃需求，历史变更同样计入）
+  const reqsWithChanges = requirements.filter((r) => {
+    const changelogFile = path.join(r.path, 'CHANGELOG.md');
+    return fs.existsSync(changelogFile);
+  });
 
-  if (activeReqs.length > 0) {
+  if (reqsWithChanges.length > 0) {
     let totalChanges = 0;
     let majorChanges = 0;
 
-    for (const req of activeReqs) {
+    for (const req of reqsWithChanges) {
       const changelogFile = path.join(req.path, 'CHANGELOG.md');
-      if (fs.existsSync(changelogFile)) {
-        const content = fs.readFileSync(changelogFile, 'utf8');
-        const entries = (content.match(/-/g) || []).length;
-        totalChanges += entries;
+      const content = fs.readFileSync(changelogFile, 'utf8');
+      // 每个变更条目是一个 `## ` 小节（v1.2 统一变更口径后的格式）
+      const entries = (content.match(/^##\s/gm) || []).length;
+      totalChanges += entries;
 
-        // 简单判断：如果变更描述包含"架构"、"重新"等关键词，视为重大变更
-        if (content.includes('架构') || content.includes('重新') || content.includes('重构')) {
-          majorChanges++;
-        }
-      }
+      // 大变更条目：标题带 [大] / [large] 标记，或描述含"架构/重构"关键词
+      const majorEntries = (content.match(/^##\s.*(\[大\]|\[large\]|架构|重构)/gim) || []).length;
+      majorChanges += majorEntries;
     }
 
-    if (activeReqs.length > 0) {
-      const changeFreq = totalChanges / activeReqs.length;
+    if (totalChanges > 0) {
+      const changeFreq = totalChanges / reqsWithChanges.length;
       const majorChangeRate = majorChanges / totalChanges;
 
       metrics.push({
@@ -219,8 +217,8 @@ function collectChangeMetrics(requirements) {
         metric: 'change_frequency',
         value: Number(changeFreq.toFixed(2)),
         total_changes: totalChanges,
-        active_requirements: activeReqs.length,
-        details: `平均每个需求 ${changeFreq.toFixed(1)} 次变更`,
+        requirements_with_changes: reqsWithChanges.length,
+        details: `平均每个有变更的需求 ${changeFreq.toFixed(1)} 次变更`,
       });
 
       metrics.push({
@@ -246,7 +244,7 @@ function collectValueMetrics(requirements) {
 
   // 需求完成率
   const allReqs = requirements;
-  const completedReqs = requirements.filter((r) => r.meta.status === 'completed' || r.meta.status === 'testing');
+  const completedReqs = requirements.filter((r) => r.meta.status === 'done');
 
   if (allReqs.length > 0) {
     const completionRate = completedReqs.length / allReqs.length;
@@ -260,21 +258,16 @@ function collectValueMetrics(requirements) {
     });
   }
 
-  // 优先级准确率（基于优先级变更次数）
-  const withPriority = requirements.filter((r) => r.meta.priority && r.meta.priority.level);
-
-  if (withPriority.length > 0) {
-    // 简化计算：假设优先级调整越少越准确
-    const stablePriority = withPriority.filter((r) => !r.meta.priority_adjusted).length;
-    const accuracyRate = stablePriority / withPriority.length;
-
+  // 优先级覆盖度：完成阶段三（优先级评估）的需求占比
+  const evaluated = requirements.filter((r) => r.meta.priority_detail && r.meta.priority_detail.level);
+  if (allReqs.length > 0) {
     metrics.push({
       date: now,
-      metric: 'priority_accuracy',
-      value: Number((accuracyRate * 100).toFixed(1)) + '%',
-      stable: stablePriority,
-      total: withPriority.length,
-      details: `${stablePriority}/${withPriority.length} 优先级未调整`,
+      metric: 'priority_coverage',
+      value: Number(((evaluated.length / allReqs.length) * 100).toFixed(1)) + '%',
+      evaluated: evaluated.length,
+      total: allReqs.length,
+      details: `${evaluated.length}/${allReqs.length} 需求已评估优先级`,
     });
   }
 
@@ -356,11 +349,10 @@ function displayMetricsSummary(metrics) {
   const displayNames = {
     cycle_time: '需求交付周期',
     rework_rate: '返工率',
-    quality_gate_pass_rate: '质量门禁通过率',
     change_frequency: '变更频率',
     major_change_rate: '重大变更占比',
     completion_rate: '需求完成率',
-    priority_accuracy: '优先级准确率',
+    priority_coverage: '优先级覆盖度',
   };
 
   for (const [key, value] of Object.entries(summary)) {
@@ -397,8 +389,6 @@ function initMetricsSystem() {
         targets: {
           cycle_time: 2.0,
           rework_rate: 0.15,
-          quality_gate_pass_rate: 0.9,
-          user_satisfaction: 4.0,
           completion_rate: 0.9,
         },
         alerts: {
@@ -426,7 +416,7 @@ function initMetricsSystem() {
       metrics: {
         cycle_time: [],
         rework_rate: [],
-        quality_gate_pass_rate: [],
+        change_frequency: [],
         completion_rate: [],
         user_satisfaction: [],
       },

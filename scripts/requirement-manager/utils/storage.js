@@ -55,7 +55,7 @@ export async function exists(filePath) {
 /**
  * 创建需求目录
  * @param {string} baseDir - 基础目录
- * @param {string} type - 需求类型 (feature/bug/tech-debt)
+ * @param {string} type - 需求类型 (feature/bug/question/adjustment/refactor)
  * @param {string} id - 需求ID
  * @returns {Promise<string>} 创建的目录路径
  */
@@ -65,16 +65,17 @@ export async function createRequirementDir(baseDir, type, id) {
 
   await fs.mkdir(reqPath, { recursive: true });
 
-  // 创建初始元数据
+  // 创建初始元数据（规范口径：status=planning，日期字段 created/updatedAt）
+  const now = new Date().toISOString();
   const meta = {
     id,
     type,
     title: '',
     description: '',
-    status: 'open',
+    status: 'planning',
     priority: 'medium',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    created: now,
+    updatedAt: now,
   };
 
   await writeMeta(baseDir, reqPath, meta);

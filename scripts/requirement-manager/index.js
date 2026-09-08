@@ -178,20 +178,73 @@ class RequirementManager {
 
     if (description.includes('--status')) {
       const id = description.replace('--status', '').trim();
-      // TODO: 实现单个需求状态查询
-      return {
-        success: true,
-        action: 'show_status',
-        requirementId: id,
-        message: `显示需求 ${id} 的状态`,
-        implementation: 'TODO: 实现状态查询',
-      };
+      return await this.handleStatusQuery(id);
     }
 
     return {
       success: false,
       error: 'unknown_query_command',
       message: '未知的查询命令',
+    };
+  }
+
+  /**
+   * 处理单个需求状态查询
+   * @param {string} id - 需求 ID
+   * @returns {Promise<object>} 查询结果
+   */
+  async handleStatusQuery(id) {
+    if (!id) {
+      return {
+        success: false,
+        error: 'missing_requirement_id',
+        message: '用法: --status <需求ID>，例如 --status FEAT-20260908-001',
+      };
+    }
+
+    let meta;
+    try {
+      meta = await this.processor.get(id);
+    } catch (err) {
+      return {
+        success: false,
+        error: 'requirement_not_found',
+        message: `未找到需求 ${id}：${err.message}`,
+        suggestions: ['用 --list 查看所有需求 ID', '检查 ID 前缀（FEAT/BUG/QUES/ADJU/REF）'],
+      };
+    }
+
+    const labels = { planning: '规划中', analyzed: '已分析', implementing: '实现中', review: '评审中', done: '已完成' };
+    const colors = { planning: 'yellow', analyzed: 'cyan', implementing: 'blue', review: 'magenta', done: 'green' };
+    const status = labels[meta.status] ? meta.status : 'planning';
+    const reqPath = this.processor.getRequirementPath(id);
+
+    console.log(chalk.cyan(`📌 需求 ${meta.id}`));
+    console.log(`${chalk.gray('  标题:')} ${meta.title || meta.description?.substring(0, 60) || '无标题'}`);
+    console.log(`${chalk.gray('  类型:')} ${meta.type}`);
+    console.log(`${chalk.gray('  状态:')} ${chalk[colors[status]](labels[status] || meta.status)}`);
+    console.log(`${chalk.gray('  优先级:')} ${meta.priority_detail?.level || meta.priority || '未评估'}`);
+    console.log(`${chalk.gray('  创建:')} ${meta.created || '未知'}`);
+    if (meta.updatedAt) {
+      console.log(`${chalk.gray('  更新:')} ${meta.updatedAt}`);
+    }
+    if (meta.completed) {
+      console.log(`${chalk.gray('  完成:')} ${meta.completed}`);
+    }
+    if (meta.tags && meta.tags.length > 0) {
+      console.log(`${chalk.gray('  标签:')} ${meta.tags.join(', ')}`);
+    }
+    if (reqPath) {
+      console.log(`${chalk.gray('  路径:')} ${reqPath}`);
+    }
+    console.log('');
+
+    return {
+      success: true,
+      action: 'show_status',
+      requirementId: meta.id,
+      status: meta.status,
+      message: `已显示需求 ${meta.id} 的状态`,
     };
   }
 

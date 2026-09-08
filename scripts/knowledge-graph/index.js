@@ -13,6 +13,7 @@
 import Fuse from 'fuse.js';
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
+import { TYPE_DIRS } from '../requirement-manager/core/schema.js';
 
 /**
  * 知识图谱类
@@ -37,8 +38,8 @@ export class KnowledgeGraph {
    * @returns {Promise<void>}
    */
   async initialize() {
-    // 扫描所有需求目录
-    const types = ['features', 'bugs', 'questions', 'adjustments', 'refactorings'];
+    // 扫描所有需求目录（目录名口径统一来自 core/schema.js）
+    const types = Object.values(TYPE_DIRS);
 
     for (const type of types) {
       const typePath = join(this.requirementsPath, type);
@@ -90,14 +91,14 @@ export class KnowledgeGraph {
       title: meta.title,
       description: meta.description,
       priority: {
-        ...meta.priority,
-        score: parseFloat(meta.priority.score),
+        level: meta.priority_detail?.level || meta.priority || 'medium',
+        score: Number.parseFloat(meta.priority_detail?.score) || 0,
       },
       status: meta.status,
       tags: this.extractTags(specContent),
       keywords,
-      createdAt: meta.created_at,
-      updatedAt: meta.updated_at,
+      createdAt: meta.created || meta.createdAt || meta.created_at,
+      updatedAt: meta.updatedAt || meta.updated_at,
     };
   }
 

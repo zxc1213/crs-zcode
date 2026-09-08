@@ -350,10 +350,47 @@ describe('Processor - update', () => {
       description: 'test bug',
     });
 
-    await processor.update(created.id, { status: 'in_progress' });
+    // 规范状态直接写入
+    await processor.update(created.id, { status: 'implementing' });
 
     const meta = await readMeta(testBaseDir, created.path);
-    expect(meta.status).to.equal('in_progress');
+    expect(meta.status).to.equal('implementing');
+
+    // 旧状态词表自动归一到规范口径
+    await processor.update(created.id, { status: 'in_progress' });
+    const normalized = await readMeta(testBaseDir, created.path);
+    expect(normalized.status).to.equal('implementing');
+  });
+
+  it('should reject unknown status values', async () => {
+    const created = await processor.create({
+      type: 'bug',
+      mode: 'semi_auto',
+      description: 'test bug',
+    });
+
+    let err;
+    try {
+      await processor.update(created.id, { status: 'not_a_status' });
+    } catch (e) {
+      err = e;
+    }
+    expect(err).to.be.ok;
+    expect(err.message).to.match(/Invalid status/);
+  });
+
+  it('should write completed date when status becomes done', async () => {
+    const created = await processor.create({
+      type: 'feature',
+      mode: 'semi_auto',
+      description: 'test feature',
+    });
+
+    await processor.update(created.id, { status: 'done' });
+
+    const meta = await readMeta(testBaseDir, created.path);
+    expect(meta.status).to.equal('done');
+    expect(meta.completed).to.be.a('string');
   });
 
   it('should update multiple fields', async () => {
@@ -370,7 +407,9 @@ describe('Processor - update', () => {
     });
 
     const meta = await readMeta(testBaseDir, created.path);
-    expect(meta.status).to.equal('completed');
+    // 旧词 completed 归一为 done，且补写完成时间
+    expect(meta.status).to.equal('done');
+    expect(meta.completed).to.be.a('string');
     expect(meta.priority).to.equal('high');
     expect(meta.title).to.equal('Updated Title');
   });

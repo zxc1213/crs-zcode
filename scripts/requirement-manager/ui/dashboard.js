@@ -1,5 +1,8 @@
 /**
  * 仪表板模块 - 显示需求管理系统概览
+ *
+ * 状态与字段口径统一来自 core/schema.js（planning/analyzed/implementing/review/done，
+ * created/updatedAt/completed），读取侧自动兼容旧口径（open/in_progress 等）。
  */
 
 import Table from 'cli-table3';
@@ -7,39 +10,15 @@ import chalk from 'chalk';
 import fs from 'fs/promises';
 import path from 'path';
 import yaml from 'js-yaml';
-
-/**
- * 需求类型目录映射
- */
-const TYPE_DIRS = {
-  feature: 'features',
-  bug: 'bugs',
-  question: 'questions',
-  adjustment: 'adjustments',
-  refactor: 'refactors',
-};
-
-/**
- * 状态到中文的映射
- */
-const STATUS_LABELS = {
-  open: '待处理',
-  in_progress: '进行中',
-  completed: '已完成',
-  closed: '已关闭',
-  blocked: '已阻塞',
-};
-
-/**
- * 状态颜色映射
- */
-const STATUS_COLORS = {
-  open: 'yellow',
-  in_progress: 'blue',
-  completed: 'green',
-  closed: 'gray',
-  blocked: 'red',
-};
+import {
+  TYPE_DIRS,
+  STATUSES,
+  STATUS_LABELS,
+  STATUS_COLORS,
+  normalizeMeta,
+  isActiveStatus,
+  requirementDate,
+} from '../core/schema.js';
 
 /**
  * Dashboard 类
@@ -82,14 +61,13 @@ export class Dashboard {
 
   /**
    * 收集统计数据
-   * @returns {Promise<object>} 统计数据对象
+   * @returns {Promise<object>} 统计数据对象 { total, active, byStatus, byType }
    */
   async getStatistics() {
     const stats = {
       total: 0,
-      open: 0,
-      in_progress: 0,
-      completed: 0,
+      active: 0,
+      byStatus: Object.fromEntries(STATUSES.map((s) => [s, 0])),
       byType: {
         feature: 0,
         bug: 0,
@@ -99,38 +77,14 @@ export class Dashboard {
       },
     };
 
-    // 遍历所有类型目录
-    for (const [type, dir] of Object.entries(TYPE_DIRS)) {
-      const typePath = path.join(this.requirementsDir, dir);
-
-      try {
-        const entries = await fs.readdir(typePath, { withFileTypes: true });
-
-        for (const entry of entries) {
-          if (entry.isDirectory()) {
-            const reqPath = path.join(typePath, entry.name);
-            const meta = await this.readRequirementMeta(reqPath);
-
-            if (meta) {
-              stats.total++;
-              stats.byType[type]++;
-
-              // 统计状态
-              if (meta.status === 'open') {
-                stats.open++;
-              } else if (meta.status === 'in_progress') {
-                stats.in_progress++;
-              } else if (meta.status === 'completed') {
-                stats.completed++;
-              }
-            }
-          }
-        }
-      } catch (error) {
-        // 忽略不存在的目录
-        if (error.code !== 'ENOENT') {
-          console.error(`Error scanning directory ${typePath}:`, error);
-        }
+    for (const meta of await this.getAllRequirements()) {
+      stats.total++;
+      stats.byStatus[meta.status]++;
+      if (meta.status !== 'done') {
+        stats.active++;
+      }
+      if (stats.byType[meta.type] !== undefined) {
+        stats.byType[meta.type]++;
       }
     }
 
@@ -152,43 +106,27 @@ export class Dashboard {
       },
     });
 
-    table.push(['总需求数', stats.total.toString()], ['待处理', stats.open.toString()], ['进行中', stats.in_progress.toString()], ['已完成', stats.completed.toString()]);
+    table.push(['总需求数', stats.total.toString()], ['活跃需求', stats.active.toString()]);
+    for (const status of STATUSES) {
+      table.push([`  ${STATUS_LABELS[status]}`, stats.byStatus[status].toString()]);
+    }
 
     console.log(table.toString());
     console.log('');
   }
 
   /**
-   * 获取活跃需求
+   * 获取活跃需求（非 done 状态中创建时间最新者，与 hooks 口径一致）
    * @returns {Promise<object|null>} 活跃需求对象
    */
   async getActiveRequirement() {
-    // 遍历所有类型目录，查找状态为 in_progress 的需求
-    for (const [type, dir] of Object.entries(TYPE_DIRS)) {
-      const typePath = path.join(this.requirementsDir, dir);
-
-      try {
-        const entries = await fs.readdir(typePath, { withFileTypes: true });
-
-        for (const entry of entries) {
-          if (entry.isDirectory()) {
-            const reqPath = path.join(typePath, entry.name);
-            const meta = await this.readRequirementMeta(reqPath);
-
-            if (meta && meta.status === 'in_progress') {
-              return meta;
-            }
-          }
-        }
-      } catch (error) {
-        // 忽略不存在的目录
-        if (error.code !== 'ENOENT') {
-          console.error(`Error scanning directory ${typePath}:`, error);
-        }
-      }
+    const all = await this.getAllRequirements();
+    const active = all.filter((meta) => isActiveStatus(meta.status));
+    if (active.length === 0) {
+      return null;
     }
-
-    return null;
+    active.sort((a, b) => new Date(requirementDate(b, 'created') || 0) - new Date(requirementDate(a, 'created') || 0));
+    return active[0];
   }
 
   /**
@@ -226,7 +164,7 @@ export class Dashboard {
 
     const table = new Table({
       head: [chalk.white('ID'), chalk.white('标题'), chalk.white('状态')],
-      colWidths: [20, 30, 10],
+      colWidths: [22, 34, 10],
       style: {
         head: [],
         border: ['gray'],
@@ -237,7 +175,7 @@ export class Dashboard {
       const title = req.title || req.description?.substring(0, 25) || '无标题';
       const statusLabel = STATUS_LABELS[req.status] || req.status;
 
-      table.push([req.id, title.substring(0, 30), statusLabel]);
+      table.push([req.id, title.substring(0, 32), statusLabel]);
     }
 
     console.log(table.toString());
@@ -250,10 +188,26 @@ export class Dashboard {
    * @returns {Promise<Array>} 最近需求数组
    */
   async getRecentRequirements(limit = 10) {
+    const allReqs = await this.getAllRequirements();
+
+    // 按创建时间倒序（兼容旧日期字段口径）
+    allReqs.sort((a, b) => {
+      const dateA = new Date(requirementDate(a, 'created') || 0);
+      const dateB = new Date(requirementDate(b, 'created') || 0);
+      return dateB - dateA;
+    });
+
+    return allReqs.slice(0, limit);
+  }
+
+  /**
+   * 扫描所有类型目录，读取并规范化全部需求元数据
+   * @returns {Promise<Array<object>>} 规范化后的 meta 数组
+   */
+  async getAllRequirements() {
     const allReqs = [];
 
-    // 遍历所有类型目录
-    for (const [type, dir] of Object.entries(TYPE_DIRS)) {
+    for (const [, dir] of Object.entries(TYPE_DIRS)) {
       const typePath = path.join(this.requirementsDir, dir);
 
       try {
@@ -277,19 +231,11 @@ export class Dashboard {
       }
     }
 
-    // 按创建时间排序
-    allReqs.sort((a, b) => {
-      const dateA = new Date(a.created || a.createdAt || 0);
-      const dateB = new Date(b.created || b.createdAt || 0);
-      return dateB - dateA;
-    });
-
-    // 返回最新的 N 个
-    return allReqs.slice(0, limit);
+    return allReqs;
   }
 
   /**
-   * 读取需求元数据
+   * 读取需求元数据（读取侧规范化状态口径）
    * @param {string} reqPath - 需求路径
    * @returns {Promise<object|null>} 元数据对象
    */
@@ -298,7 +244,7 @@ export class Dashboard {
 
     try {
       const content = await fs.readFile(metaPath, 'utf-8');
-      return yaml.load(content);
+      return normalizeMeta(yaml.load(content));
     } catch (error) {
       if (error.code === 'ENOENT') {
         return null;

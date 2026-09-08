@@ -110,8 +110,13 @@ description: 智能需求管理统一入口 - 引导式创建需求、查询状�
    <一句话教训/规则/模式>
    <适用条件>
    ```
-3. **更新 `meta.yaml`**：status → done，记录 completed 时间
-4. lessons 会在此后每次创建相关需求时被自动检索（阶段 1）——这就是经验的复利
+3. **更新 `meta.yaml`**：status → done（引擎自动补写 completed 时间）
+4. **历史入账**：复盘与经验写完后各记一条时间线事件（引擎维护项目历史，不手改 timeline.yaml）：
+   ```bash
+   node "$ZCODE_PLUGIN_ROOT/scripts/requirement-manager/index.js" event --type retro_completed --id <需求ID> --title "复盘完成" --summary "<一句话: 最大收获/踩坑>"
+   node "$ZCODE_PLUGIN_ROOT/scripts/requirement-manager/index.js" event --type lesson_saved --id <需求ID> --title "<lesson主题>" --summary "<一句话教训>"
+   ```
+5. lessons 会在此后每次创建相关需求时被自动检索（阶段 1）——这就是经验的复利
 
 用户明确说"跳过复盘"时记录到 retro.md（一行占位）后直接关闭，不强求。
 

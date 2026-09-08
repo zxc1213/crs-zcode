@@ -31,7 +31,7 @@ description: 需求变更处理 - 在任务执行过程中管理需求变更，�
 /crs:req-change FEAT-20260514-001-a3b2c1 --reason "..." --impact
 
 # 指定变更类型
-/crs:req-change FEAT-20260514-001-a3b2c1 --type major --reason "架构调整"
+/crs:req-change FEAT-20260514-001-a3b2c1 --type large --reason "架构调整"
 ```
 
 ## 选项说明
@@ -188,7 +188,7 @@ description: 需求变更处理 - 在任务执行过程中管理需求变更，�
 
 ```bash
 # 开发中发现：用WebSocket比轮询更好
-/crs:req-change FEAT-20260514-001-a3b2c1 --type major --reason "WebSocket实时性更好，架构更优"
+/crs:req-change FEAT-20260514-001-a3b2c1 --type large --reason "WebSocket实时性更好，架构更优"
 ```
 
 系统会：
@@ -211,19 +211,19 @@ description: 需求变更处理 - 在任务执行过程中管理需求变更，�
 2. 直接执行并记录
 3. 继续执行任务
 
-## 变更历史记录
+## 变更历史记录（两层口径）
 
-所有变更都会记录到需求的 `spec.md` 变更历史部分：
+**第一层：需求内详细记录** — 写入需求目录下的 `CHANGELOG.md`，每个变更一个 `## [日期 时间] [小|中|大] 标题` 小节（原因/变更内容/影响分析/决策依据）。
 
-```markdown
-## 变更历史
+**第二层：项目级历史入账** — 调用引擎，变更会记入项目时间线（`project/timeline.yaml`）与项目变更日志，已聚合进项目文档的需求会自动替换更新旧区块：
 
-| 日期       | 变更内容          | 影响分析         | 变更类型 |
-| ---------- | ----------------- | ---------------- | -------- |
-| 2026-05-14 | 创建需求          | -                | -        |
-| 2026-05-15 | 添加密码强度验证  | 影响T03、T05任务 | 中等变更 |
-| 2026-05-16 | 改用WebSocket架构 | 重新规划全部任务 | 重大变更 |
+```bash
+node "$ZCODE_PLUGIN_ROOT/scripts/requirement-manager/index.js" change --id FEAT-20260514-001-a3b2c1 --level medium --reason "增加密码强度验证"
 ```
+
+查看项目完整历史：`/crs:req --history`。
+
+**注意**：spec.md 根索引的"变更历史表"只记录文档自身修订（格式调整、章节增删），需求执行变更不写那里——避免同一变更记三处的口径混乱。
 
 ## 重要说明
 

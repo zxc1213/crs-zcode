@@ -272,6 +272,19 @@ planning → analyzed → implementing → review → done
     // 更新索引
     this.index.set(id, reqPath);
 
+    // 时间线事件：需求创建
+    try {
+      const { appendEvent } = await import('../project-sync/timeline.js');
+      await appendEvent(this.baseDir, {
+        type: 'requirement_created',
+        reqId: id,
+        title: meta.title,
+        summary: `${type} 需求创建，进入 ${meta.status}`,
+      });
+    } catch (_timelineError) {
+      // 账本写入失败不影响主流程
+    }
+
     // 同步到知识图谱
     try {
       const graph = await getKnowledgeGraph(this.baseDir);
@@ -361,6 +374,21 @@ planning → analyzed → implementing → review → done
 
     // 写回元数据
     await writeMeta(this.baseDir, reqPath, updatedMeta);
+
+    // 时间线事件：状态流转
+    if (updates.status !== undefined && meta.status !== updatedMeta.status) {
+      try {
+        const { appendEvent } = await import('../project-sync/timeline.js');
+        await appendEvent(this.baseDir, {
+          type: 'status_changed',
+          reqId: id,
+          title: updatedMeta.title,
+          summary: `${meta.status} → ${updatedMeta.status}`,
+        });
+      } catch (_timelineError) {
+        // 账本写入失败不影响主流程
+      }
+    }
 
     // 同步状态到 plan.md
     await syncPlanStatus(this.baseDir, reqPath);

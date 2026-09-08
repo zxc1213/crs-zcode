@@ -5,11 +5,14 @@
  * - initializeProjectDocs(baseDir, options) - 初始化或修复 project 目录
  * - syncOnRequirementDone(baseDir, reqId) - 单需求完成同步
  * - syncOnBugFixed(baseDir, bugId) - Bug 修复同步（含设计变更判定）
+ * - syncOnRequirementChange(baseDir, reqId, changeInfo) - 需求变更同步（区块替换语义）
  * - fullResync(baseDir) - 全量重生成
  *
  * 设计原则：
  * - 被动触发：不主动轮询
- * - 幂等追加：changelog 追加，主文档按章节合并
+ * - 区块可更新：项目文档中的需求区块用 crs:block 标记包裹，done 聚合与变更同步均走 upsertBlock，
+ *   需求后续变更会替换旧区块而不是被幂等跳过（历史进 changelog 与 timeline）
+ * - 事件入账：所有同步动作追加 timeline.yaml 事件（项目历史唯一事实源）
  * - 静默降级：失败记录日志，不影响主流程
  */
 
@@ -21,6 +24,8 @@ import { fileURLToPath } from 'url';
 import { scanProjectStructure } from './structure-scanner.js';
 import { aggregateRequirements, aggregateSingleRequirement, formatFeatureTableRows, formatFeatureDetails, formatBusinessTable } from './requirements-aggregator.js';
 import { summarizeDesign, summarizeSingleDesign, detectDesignChange } from './design-summarizer.js';
+import { appendEvent } from './timeline.js';
+import { CHANGE_LEVELS } from '../core/schema.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = path.resolve(__dirname, '../../../templates/project');
@@ -136,6 +141,9 @@ async function appendChangelog(baseDir, entry) {
   }
   if (entry.source) {
     lines.push(`- **来源**: ${entry.source}`);
+  }
+  if (entry.summary) {
+    lines.push(`- **说明**: ${entry.summary}`);
   }
   if (entry.designChange !== undefined) {
     lines.push(`- **设计变更**: ${entry.designChange ? '是' : '否'}`);
@@ -373,15 +381,15 @@ export async function syncOnRequirementDone(baseDir, reqId) {
 
     const affectedDocs = [];
 
-    // 根据类型路由
+    // 根据类型路由（upsertBlock：已有区块则替换，保证需求后续变更能同步进来）
     if (single.type === 'feature' || single.type === 'adjustment') {
-      // 更新 functional-requirements.md（追加模式）
-      await appendToSection(baseDir, 'functional-requirements.md', '## 功能详情', formatFeatureDetails([single]));
+      // 更新 functional-requirements.md
+      await upsertBlock(baseDir, 'functional-requirements.md', '## 功能详情', reqId, formatFeatureDetails([single]));
       affectedDocs.push('functional-requirements.md');
 
       // feature 类型也更新 business
       if (single.type === 'feature') {
-        await appendToSection(baseDir, 'business-requirements.md', '## 业务需求清单', `\n### ${single.title}\n\n- **ID**: \`${single.id}\`\n- **摘要**: ${single.summary || '(无摘要)'}\n`);
+        await upsertBlock(baseDir, 'business-requirements.md', '## 业务需求清单', reqId, `### ${single.title}\n\n- **ID**: \`${single.id}\`\n- **摘要**: ${single.summary || '(无摘要)'}\n`);
         affectedDocs.push('business-requirements.md');
       }
     }
@@ -391,7 +399,7 @@ export async function syncOnRequirementDone(baseDir, reqId) {
       const singleDesign = await summarizeSingleDesign(baseDir, reqId);
       if (singleDesign && singleDesign.sections.length) {
         const designText = singleDesign.sections.map((s) => `### 来自 \`${reqId}\` — ${s.title}\n\n${s.body.slice(0, 500)}${s.body.length > 500 ? '...' : ''}\n`).join('\n---\n\n');
-        await appendToSection(baseDir, 'functional-design.md', '## 关键设计决策', designText);
+        await upsertBlock(baseDir, 'functional-design.md', '## 关键设计决策', reqId, designText);
         affectedDocs.push('functional-design.md');
       }
     }
@@ -409,6 +417,14 @@ export async function syncOnRequirementDone(baseDir, reqId) {
 
     // 更新 meta
     await updateProjectMetaStats(baseDir, 'requirement-done', reqId);
+
+    // 时间线事件
+    await recordEvent(baseDir, {
+      type: 'project_synced',
+      reqId,
+      title: single.title,
+      summary: `需求完成同步，更新 ${affectedDocs.length} 份项目文档`,
+    });
 
     result.updated.push(...affectedDocs);
   } catch (error) {
@@ -460,11 +476,11 @@ export async function syncOnBugFixed(baseDir, bugId) {
       const designSummary = await summarizeSingleDesign(baseDir, bugId);
       if (designSummary && designSummary.sections.length) {
         const designText = designSummary.sections.map((s) => `### 来自 \`${bugId}\` (Bug 设计变更) — ${s.title}\n\n${s.body.slice(0, 500)}${s.body.length > 500 ? '...' : ''}\n`).join('\n---\n\n');
-        await appendToSection(baseDir, 'functional-design.md', '## 关键设计决策', designText);
+        await upsertBlock(baseDir, 'functional-design.md', '## 关键设计决策', bugId, designText);
         affectedDocs.push('functional-design.md');
       } else {
         // 即使没提取到 section，也追加一条占位
-        await appendToSection(baseDir, 'functional-design.md', '## 关键设计决策', `### 来自 \`${bugId}\` (Bug 设计变更)\n\n_详见 [原始 Bug 文档](../bugs/${bugId}/spec/decisions.md)_\n`);
+        await upsertBlock(baseDir, 'functional-design.md', '## 关键设计决策', bugId, `### 来自 \`${bugId}\` (Bug 设计变更)\n\n_详见 [原始 Bug 文档](../bugs/${bugId}/spec/decisions.md)_\n`);
         affectedDocs.push('functional-design.md');
       }
     } else {
@@ -485,11 +501,131 @@ export async function syncOnBugFixed(baseDir, bugId) {
 
     await updateProjectMetaStats(baseDir, 'bug-fixed', bugId);
 
+    // 时间线事件
+    await recordEvent(baseDir, {
+      type: 'bug_fixed',
+      reqId: bugId,
+      title: single.title,
+      summary: hasDesignChange ? `Bug 修复并产生设计变更：${reason}` : 'Bug 修复，无设计变更',
+    });
+    if (hasDesignChange) {
+      await recordEvent(baseDir, {
+        type: 'design_change',
+        reqId: bugId,
+        title: single.title,
+        summary: `Bug 修复触发设计变更：${reason}`,
+      });
+    }
+
     result.updated.push(...affectedDocs);
   } catch (error) {
     result.success = false;
     result.errors.push(error.message);
     await logProjectSyncError(baseDir, bugId, error);
+  }
+
+  result.stats.durationMs = Date.now() - start;
+  return result;
+}
+
+/**
+ * 需求变更后同步（req-change 流程的引擎侧落点）
+ *
+ * 与 done 同步的区别：
+ * - 无论需求是否 done 都会记录变更（changelog + 时间线）
+ * - 已聚合进项目文档的需求（曾 done 过）会重聚合并以区块替换语义更新旧条目，
+ *   解决"需求 done 后再变更，项目文档永远是旧内容"的问题
+ *
+ * @param {string} baseDir
+ * @param {string} reqId
+ * @param {object} changeInfo - { level: small|medium|large, reason, summary? }
+ * @returns {Promise<object>} SyncResult
+ */
+export async function syncOnRequirementChange(baseDir, reqId, changeInfo = {}) {
+  const result = newResult();
+  const start = Date.now();
+  const ts = now();
+  const level = CHANGE_LEVELS.includes(changeInfo.level) ? changeInfo.level : 'medium';
+  const reason = String(changeInfo.reason || '').slice(0, 500);
+
+  try {
+    if (!(await isProjectInitialized(baseDir))) {
+      await initializeProjectDocs(baseDir);
+    }
+
+    const single = await aggregateSingleRequirement(baseDir, reqId);
+    if (!single) {
+      result.success = false;
+      result.errors.push(`E_PROJ_REQ_NOT_FOUND: ${reqId}`);
+      result.stats.durationMs = Date.now() - start;
+      return result;
+    }
+
+    const affectedDocs = [];
+
+    // 仅当该需求已聚合过（done 过）才回写项目文档，未聚合的活跃需求只记录
+    const functionalDocPath = path.join(baseDir, '.requirements', 'project', 'functional-requirements.md');
+    const businessDocPath = path.join(baseDir, '.requirements', 'project', 'business-requirements.md');
+    const designDocPath = path.join(baseDir, '.requirements', 'project', 'functional-design.md');
+    const aggregatedSomewhere = await Promise.all([functionalDocPath, businessDocPath, designDocPath].map((p) => fs.readFile(p, 'utf-8').catch(() => '')));
+
+    if (aggregatedSomewhere.some((c) => c.includes(`\`${reqId}\``))) {
+      if (single.type === 'feature' || single.type === 'adjustment') {
+        await upsertBlock(baseDir, 'functional-requirements.md', '## 功能详情', reqId, formatFeatureDetails([single]));
+        affectedDocs.push('functional-requirements.md');
+        if (single.type === 'feature') {
+          await upsertBlock(baseDir, 'business-requirements.md', '## 业务需求清单', reqId, `### ${single.title}\n\n- **ID**: \`${single.id}\`\n- **摘要**: ${single.summary || '(无摘要)'}\n`);
+          affectedDocs.push('business-requirements.md');
+        }
+      }
+      if (single.type === 'refactor' || single.type === 'feature' || single.type === 'bug') {
+        const singleDesign = await summarizeSingleDesign(baseDir, reqId);
+        if (singleDesign && singleDesign.sections.length) {
+          const designText = singleDesign.sections.map((s) => `### 来自 \`${reqId}\` (变更后更新) — ${s.title}\n\n${s.body.slice(0, 500)}${s.body.length > 500 ? '...' : ''}\n`).join('\n---\n\n');
+          await upsertBlock(baseDir, 'functional-design.md', '## 关键设计决策', reqId, designText);
+          affectedDocs.push('functional-design.md');
+        }
+      }
+      result.updated.push(...affectedDocs);
+    } else {
+      result.skipped.push('project-docs (requirement not aggregated yet)');
+    }
+
+    // changelog：变更必有记录
+    await appendChangelog(baseDir, {
+      timestamp: ts,
+      id: reqId,
+      type: single.type,
+      title: single.title,
+      action: `requirement-changed-${level}`,
+      affectedDocs,
+      source: reqId,
+      summary: reason,
+    });
+
+    await updateProjectMetaStats(baseDir, `requirement-changed-${level}`, reqId);
+
+    // 时间线事件
+    await recordEvent(baseDir, {
+      type: 'requirement_changed',
+      reqId,
+      title: single.title,
+      summary: `[${level}] ${reason || '(未填原因)'}`,
+      details: affectedDocs.length ? `已更新项目文档: ${affectedDocs.join(', ')}` : undefined,
+    });
+
+    if (affectedDocs.length) {
+      await recordEvent(baseDir, {
+        type: 'project_synced',
+        reqId,
+        title: single.title,
+        summary: `变更后重同步，更新 ${affectedDocs.length} 份项目文档`,
+      });
+    }
+  } catch (error) {
+    result.success = false;
+    result.errors.push(error.message);
+    await logProjectSyncError(baseDir, reqId, error);
   }
 
   result.stats.durationMs = Date.now() - start;
@@ -537,6 +673,13 @@ export async function fullResync(baseDir) {
     });
 
     await updateProjectMetaStats(baseDir, 'full-resync', null);
+
+    // 时间线事件
+    await recordEvent(baseDir, {
+      type: 'full_resync',
+      title: '项目文档全量重生成',
+      summary: 'project/ 4 份文档按当前需求状态全量重建（changelog 保留）',
+    });
   } catch (error) {
     result.success = false;
     result.errors.push(error.message);
@@ -548,13 +691,23 @@ export async function fullResync(baseDir) {
 }
 
 /**
- * 在指定 H2 章节后追加内容（幂等：基于 ID 去重）
+ * 在指定 H2 章节内写入需求区块（幂等 + 可更新）
+ *
+ * 区块用 HTML 注释标记包裹：
+ *   <!-- crs:block:REQ-ID:start --> ... <!-- crs:block:REQ-ID:end -->
+ *
+ * 语义：
+ * 1. 标记存在 → 整块替换（需求变更后内容同步更新的关键）
+ * 2. 标记不存在但旧聚合内容已含该 ID（v1.2 之前的无标记格式）→ 按 `### ` 标题块定位并原位替换为带标记的新块
+ * 3. 都不存在 → 追加到章节内
+ *
  * @param {string} baseDir
  * @param {string} docFile - 文档文件名
  * @param {string} sectionHeader - H2 章节（如 "## 功能详情"）
- * @param {string} addition - 要追加的内容
+ * @param {string} reqId - 需求 ID（用于标记定位）
+ * @param {string} blockContent - 区块正文（不含标记）
  */
-async function appendToSection(baseDir, docFile, sectionHeader, addition) {
+async function upsertBlock(baseDir, docFile, sectionHeader, reqId, blockContent) {
   const docPath = path.join(baseDir, '.requirements', 'project', docFile);
   let content = '';
   try {
@@ -563,30 +716,83 @@ async function appendToSection(baseDir, docFile, sectionHeader, addition) {
     content = `# ${docFile.replace('.md', '')}\n\n${sectionHeader}\n\n`;
   }
 
-  // 提取 addition 中的 ID 进行幂等检查（捕获完整 ID，去除反引号）
-  const idMatch = addition.match(/`((?:FEAT|BUG|QUES|ADJU|REF|DEBT)-[^`]+)`/);
-  if (idMatch) {
-    const reqId = idMatch[1];
-    if (content.includes(`\`${reqId}\``)) {
-      return; // 已存在，跳过
+  const startMarker = `<!-- crs:block:${reqId}:start -->`;
+  const endMarker = `<!-- crs:block:${reqId}:end -->`;
+  const marked = `${startMarker}\n${blockContent.trim()}\n${endMarker}`;
+
+  // 1. 标记存在 → 替换
+  const startIdx = content.indexOf(startMarker);
+  if (startIdx >= 0) {
+    const endIdx = content.indexOf(endMarker, startIdx);
+    if (endIdx >= 0) {
+      content = content.slice(0, startIdx) + marked + content.slice(endIdx + endMarker.length);
+      await fs.writeFile(docPath, content, 'utf-8');
+      return;
     }
   }
 
+  // 2. 旧格式：按标题块定位含该 ID 的 ### 块，原位替换（迁移为带标记格式）
+  const legacy = replaceLegacyBlock(content, reqId, marked);
+  if (legacy !== null) {
+    await fs.writeFile(docPath, legacy, 'utf-8');
+    return;
+  }
+
+  // 3. 追加到章节
   const sectionStart = content.indexOf(sectionHeader);
   if (sectionStart < 0) {
-    // 章节不存在，追加到末尾
-    content = `${content.trimEnd()}\n\n${sectionHeader}\n\n${addition}\n`;
+    content = `${content.trimEnd()}\n\n${sectionHeader}\n\n${marked}\n`;
   } else {
     const insertPos = sectionStart + sectionHeader.length;
-    content = content.slice(0, insertPos) + `\n${addition}\n` + content.slice(insertPos);
+    content = content.slice(0, insertPos) + `\n${marked}\n` + content.slice(insertPos);
   }
   await fs.writeFile(docPath, content, 'utf-8');
+}
+
+/**
+ * 定位旧格式（无标记）中包含指定需求 ID 的 `### ` 标题块并替换
+ * 块边界：从 `### ` 标题行到下一个 `### `/`## ` 标题或 `---` 分隔线
+ * @param {string} content - 文档全文
+ * @param {string} reqId
+ * @param {string} replacement - 替换后的内容
+ * @returns {string|null} 替换后的全文；未找到返回 null
+ */
+function replaceLegacyBlock(content, reqId, replacement) {
+  const lines = content.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].startsWith('### ')) continue;
+
+    // 找块结束边界
+    let j = i + 1;
+    while (j < lines.length && !lines[j].startsWith('### ') && !lines[j].startsWith('## ') && lines[j].trim() !== '---') {
+      j++;
+    }
+
+    const block = lines.slice(i, j).join('\n');
+    if (block.includes(`\`${reqId}\``)) {
+      return `${lines.slice(0, i).join('\n')}\n${replacement}\n${lines.slice(j).join('\n')}`;
+    }
+    i = j - 1; // 跳过整个块
+  }
+  return null;
+}
+
+/**
+ * 记录时间线事件（静默降级，不影响同步主流程）
+ */
+async function recordEvent(baseDir, event) {
+  try {
+    await appendEvent(baseDir, event);
+  } catch (_error) {
+    // 账本写入失败不阻断同步
+  }
 }
 
 export default {
   initializeProjectDocs,
   syncOnRequirementDone,
   syncOnBugFixed,
+  syncOnRequirementChange,
   fullResync,
   isProjectInitialized,
   logProjectSyncError,

@@ -59,6 +59,7 @@ CRS（ClaudeReqSys）的 **ZCode 插件版**，为 ZCode 提供从需求捕获�
 
 ## 文档
 
+- **[📖 图形化帮助手册](docs/manual.html)** — 单文件 HTML，浏览器直接打开：导航/搜索/深色模式，新手推荐从这里开始
 - [用户指南](docs/USER_GUIDE.md) — 5 阶段流程详解、需求类型、数据目录、常见场景、复盘沉淀
 - [架构说明](docs/ARCHITECTURE.md) — 模块分层、数据流、成长机制、与原版（crs-plugin）的差异
 - [演进路线图](docs/ROADMAP.md) — v1.1 引导与成长 → v1.2 引擎重构 → v1.3 生态与反馈

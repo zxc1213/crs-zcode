@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRS 帮助手册 · 智能需求管理系统</title>
+<style>
+  :root{
+    --bg:#fafbfc; --bg-panel:#ffffff; --bg-code:#0f172a; --bg-code-inline:rgba(15,118,110,.08);
+    --fg:#1e293b; --fg-soft:#64748b; --fg-faint:#94a3b8;
+    --brand:#0d9488; --brand-deep:#0f766e; --brand-soft:rgba(13,148,136,.08); --brand-line:rgba(13,148,136,.25);
+    --accent:#6366f1;
+    --border:#e2e8f0; --border-soft:#eef2f6;
+    --warn-bg:#fffbeb; --warn-border:#fcd34d; --warn-fg:#92400e;
+    --tip-bg:#f0fdfa; --tip-border:#5eead4;
+    --code-fg:#e2e8f0; --code-dim:#7dd3fc;
+    --shadow:0 1px 3px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.05);
+    --radius:12px;
+    --sidebar-w:268px;
+  }
+  [data-theme="dark"]{
+    --bg:#0b1220; --bg-panel:#111a2c; --bg-code:#0a0f1c;
+    --fg:#dbe4f0; --fg-soft:#8fa3bd; --fg-faint:#5b6d85;
+    --brand:#2dd4bf; --brand-deep:#5eead4; --brand-soft:rgba(45,212,191,.09); --brand-line:rgba(45,212,191,.3);
+    --border:#22304a; --border-soft:#182338;
+    --warn-bg:#2a2210; --warn-border:#a37c1d; --warn-fg:#fbbf24;
+    --tip-bg:#0c2020; --tip-border:#134e4a;
+    --shadow:0 1px 3px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.3);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--fg);line-height:1.75;font-size:15px;
+  }
+  a{color:var(--brand);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ===== 布局 ===== */
+  .topbar{
+    position:fixed;top:0;left:0;right:0;height:58px;z-index:50;
+    display:flex;align-items:center;gap:16px;padding:0 20px;
+    background:var(--bg-panel);border-bottom:1px solid var(--border);
+  }
+  .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;white-space:nowrap}
+  .logo .mark{
+    width:30px;height:30px;border-radius:8px;display:grid;place-items:center;
+    background:linear-gradient(135deg,var(--brand),var(--accent));color:#fff;font-size:13px;font-weight:800;
+  }
+  .logo .sub{font-size:12px;color:var(--fg-soft);font-weight:400}
+  .searchbox{flex:1;max-width:420px;position:relative}
+  .searchbox input{
+    width:100%;height:34px;padding:0 12px 0 34px;border-radius:8px;font-size:13px;
+    border:1px solid var(--border);background:var(--bg);color:var(--fg);outline:none;
+  }
+  .searchbox input:focus{border-color:var(--brand)}
+  .searchbox .icon{position:absolute;left:10px;top:8px;color:var(--fg-faint);font-size:13px}
+  .topbar .spacer{flex:1}
+  .iconbtn{
+    height:34px;min-width:34px;padding:0 10px;border-radius:8px;border:1px solid var(--border);
+    background:var(--bg-panel);color:var(--fg-soft);cursor:pointer;font-size:13px;
+  }
+  .iconbtn:hover{border-color:var(--brand);color:var(--brand)}
+
+  .layout{display:flex;padding-top:58px}
+  .sidebar{
+    position:fixed;top:58px;bottom:0;left:0;width:var(--sidebar-w);overflow-y:auto;
+    padding:18px 14px 40px;border-right:1px solid var(--border);background:var(--bg-panel);
+  }
+  .navgroup{margin-bottom:6px}
+  .navgroup .gt{
+    font-size:11px;letter-spacing:.08em;color:var(--fg-faint);text-transform:uppercase;
+    padding:14px 10px 6px;font-weight:600;
+  }
+  .navgroup a{
+    display:block;padding:6px 10px;border-radius:8px;color:var(--fg-soft);font-size:13.5px;
+    border-left:2px solid transparent;
+  }
+  .navgroup a:hover{background:var(--brand-soft);color:var(--fg);text-decoration:none}
+  .navgroup a.active{background:var(--brand-soft);color:var(--brand-deep);border-left-color:var(--brand);font-weight:600}
+  .content{flex:1;margin-left:var(--sidebar-w);padding:36px 48px 120px;max-width:1020px}
+  .page{display:none}
+  .page.active{display:block;animation:fadein .25s ease}
+  @keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  /* ===== 排版 ===== */
+  .page h1{font-size:26px;font-weight:800;letter-spacing:-.01em;margin-bottom:6px}
+  .page h2{font-size:19px;font-weight:700;margin:38px 0 12px;padding-top:18px;border-top:1px solid var(--border-soft)}
+  .page h2:first-of-type{border-top:none;padding-top:0}
+  .page h3{font-size:15.5px;font-weight:700;margin:22px 0 8px;color:var(--brand-deep)}
+  .page p{margin:10px 0;color:var(--fg)}
+  .page p.soft{color:var(--fg-soft);font-size:13.5px}
+  .page ul,.page ol{margin:8px 0 8px 22px}
+  .page li{margin:5px 0}
+  .page strong{font-weight:700}
+  code{
+    font-family:"JetBrains Mono",Consolas,Menlo,monospace;font-size:.88em;
+    background:var(--bg-code-inline);color:var(--brand-deep);
+    padding:2px 6px;border-radius:6px;
+  }
+  [data-theme="dark"] code{color:var(--brand)}
+  pre{
+    background:var(--bg-code);color:var(--code-fg);border-radius:10px;
+    padding:14px 16px;overflow-x:auto;margin:12px 0;font-size:13px;line-height:1.65;
+    border:1px solid rgba(148,163,184,.15);
+  }
+  pre code{background:none;color:inherit;padding:0;font-size:inherit}
+  pre .c{color:#64748b}pre .k{color:var(--code-dim)}pre .g{color:#86efac}
+  .kbd{
+    display:inline-block;padding:1px 7px;border:1px solid var(--border);border-bottom-width:2px;
+    border-radius:6px;background:var(--bg-panel);font-size:12px;font-family:inherit;
+  }
+
+  /* ===== 组件 ===== */
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:18px 0}
+  .card{
+    background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radius);
+    padding:16px 18px;box-shadow:var(--shadow);
+  }
+  .card .ic{font-size:22px;margin-bottom:6px}
+  .card b{display:block;margin-bottom:4px}
+  .card p{margin:0;font-size:13px;color:var(--fg-soft)}
+  .callout{
+    border-radius:10px;padding:12px 16px;margin:14px 0;font-size:13.5px;
+    border:1px solid var(--border);border-left:3px solid var(--brand);background:var(--tip-bg);
+  }
+  .callout.warn{border-left-color:var(--warn-border);background:var(--warn-bg)}
+  .callout b{display:block;margin-bottom:2px}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px}
+  th{
+    text-align:left;padding:9px 12px;background:var(--brand-soft);color:var(--brand-deep);
+    font-weight:700;border-bottom:2px solid var(--brand-line);
+  }
+  td{padding:9px 12px;border-bottom:1px solid var(--border-soft);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .steps{counter-reset:step;margin:18px 0}
+  .step{
+    position:relative;padding:0 0 22px 46px;
+  }
+  .step::before{
+    counter-increment:step;content:counter(step);
+    position:absolute;left:0;top:0;width:30px;height:30px;border-radius:50%;
+    background:linear-gradient(135deg,var(--brand),var(--accent));color:#fff;
+    display:grid;place-items:center;font-weight:800;font-size:13px;
+  }
+  .step::after{
+    content:"";position:absolute;left:14.5px;top:34px;bottom:2px;width:2px;
+    background:linear-gradient(var(--brand-line),transparent);
+  }
+  .step:last-child::after{display:none}
+  .step b{display:block;margin-bottom:3px}
+  .step p{margin:2px 0;font-size:13.5px;color:var(--fg-soft)}
+  .badge{
+    display:inline-block;padding:1px 9px;border-radius:99px;font-size:11.5px;font-weight:600;
+    background:var(--brand-soft);color:var(--brand-deep);border:1px solid var(--brand-line);
+  }
+  .badge.gray{background:transparent;color:var(--fg-faint);border-color:var(--border)}
+  .badge.warn{background:var(--warn-bg);color:var(--warn-fg);border-color:var(--warn-border)}
+  .tree{
+    font-family:"JetBrains Mono",Consolas,monospace;font-size:12.5px;line-height:1.9;
+    background:var(--bg-panel);border:1px solid var(--border);border-radius:10px;
+    padding:16px 20px;overflow-x:auto;margin:12px 0;
+  }
+  .tree .d{color:var(--accent);font-weight:700}
+  .tree .f{color:var(--fg-soft)}
+  .tree .cm{color:var(--fg-faint)}
+  .flow{
+    display:flex;flex-direction:column;align-items:center;gap:0;margin:20px 0;
+  }
+  .fnode{
+    width:100%;max-width:520px;text-align:center;background:var(--bg-panel);
+    border:1px solid var(--brand-line);border-radius:10px;padding:11px 16px;font-size:13.5px;
+    box-shadow:var(--shadow);position:relative;
+  }
+  .fnode b{color:var(--brand-deep)}
+  .farrow{
+    height:26px;width:2px;background:var(--brand-line);position:relative;
+  }
+  .farrow::after{
+    content:"";position:absolute;bottom:0;left:-4px;border:5px solid transparent;border-top-color:var(--brand-line);
+  }
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0}
+  @media(max-width:860px){.cols{grid-template-columns:1fr}}
+  details{
+    background:var(--bg-panel);border:1px solid var(--border);border-radius:10px;
+    padding:12px 16px;margin:10px 0;
+  }
+  details summary{cursor:pointer;font-weight:600;font-size:14px}
+  details[open]{border-color:var(--brand-line)}
+  .hero{
+    background:linear-gradient(135deg,var(--brand-soft),transparent 60%),var(--bg-panel);
+    border:1px solid var(--border);border-radius:16px;padding:28px 30px;margin-bottom:26px;
+  }
+  .hero h1{margin-bottom:2px}
+  .hero .tagline{color:var(--fg-soft);font-size:14.5px;margin-bottom:14px}
+  .searchhint{color:var(--fg-faint);font-size:12px;padding:6px 10px;display:none}
+  .cmdcard{
+    background:var(--bg-panel);border:1px solid var(--border);border-left:3px solid var(--brand);
+    border-radius:10px;padding:14px 18px;margin:12px 0;
+  }
+  .cmdcard .cname{font-size:15px;font-weight:800;font-family:"JetBrains Mono",Consolas,monospace}
+  .cmdcard p{font-size:13.5px;color:var(--fg-soft);margin:4px 0 0}
+  mark{background:rgba(250,204,21,.35);color:inherit;border-radius:3px;padding:0 2px}
+  .footer{margin-top:70px;padding-top:18px;border-top:1px solid var(--border);color:var(--fg-faint);font-size:12.5px}
+  @media(max-width:960px){
+    .sidebar{display:none}
+    .content{margin-left:0;padding:24px 20px 90px}
+    .layout{display:block}
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="logo">
+    <div class="mark">CRS</div>
+    <div>需求管理系统<br><span class="sub">ZCode 插件 · v1.0</span></div>
+  </div>
+  <div class="searchbox">
+    <span class="icon">🔍</span>
+    <input id="search" type="text" placeholder="搜索手册内容，如：复盘、hook、优先级…">
+  </div>
+  <div class="spacer"></div>
+  <button class="iconbtn" id="themeBtn" title="切换深浅主题">🌙</button>
+  <a class="iconbtn" href="https://github.com/zxc1213/crs-zcode" target="_blank" style="text-decoration:none;display:inline-flex;align-items:center">GitHub ↗</a>
+</header>
+
+<div class="layout">
+<nav class="sidebar" id="nav">
+  <div class="navgroup"><div class="gt">开始</div>
+    <a href="#overview" class="active">系统概览</a>
+    <a href="#install">安装与更新</a>
+    <a href="#quickstart">快速上手</a>
+  </div>
+  <div class="navgroup"><div class="gt">核心概念</div>
+    <a href="#workflow">五阶段流程</a>
+    <a href="#commands">命令参考</a>
+    <a href="#data">数据与状态</a>
+    <a href="#hooks">自动化 Hooks</a>
+    <a href="#growth">成长机制</a>
+  </div>
+  <div class="navgroup"><div class="gt">实操</div>
+    <a href="#scenarios">场景手册</a>
+    <a href="#faq">常见问题</a>
+  </div>
+  <div class="navgroup"><div class="gt">维护者</div>
+    <a href="#architecture">架构说明</a>
+    <a href="#roadmap">演进路线</a>
+  </div>
+</nav>
+
+<main class="content" id="content">
+
+<!-- ================= 概览 ================= -->
+<section class="page active" id="overview">
+  <div class="hero">
+    <h1>CRS · 智能需求管理系统</h1>
+    <div class="tagline">为 ZCode 打造：从一个想法到测试完成，全程文档先行、经验复利。</div>
+    <span class="badge">5 阶段文档流程</span>
+    <span class="badge">阶段守卫 Hook</span>
+    <span class="badge">复盘经验沉淀</span>
+    <span class="badge gray">单入口 /crs:req</span>
+  </div>
+
+  <h2>CRS 解决什么问题</h2>
+  <p>AI 编程时代最常见的失控是：<b>想法还没说清，代码已经写完了</b>。CRS 在你和代码之间加了一道"文档先行"的流程闸门——需求先被澄清、分析、排期、设计测试，然后才允许动代码。做完还要复盘，经验自动沉淀给下一次。</p>
+
+  <div class="cards">
+    <div class="card"><div class="ic">🧭</div><b>一个入口</b><p>只需记住 /crs:req。不带参数进入引导模式，带描述自动识别类型并确认。</p></div>
+    <div class="card"><div class="ic">🚧</div><b>阶段守卫</b><p>需求还在规划阶段就改代码？Hook 自动注入违规警告，文档先行不打折。</p></div>
+    <div class="card"><div class="ic">🌱</div><b>越用越懂项目</b><p>每次需求完成的复盘会沉淀为 lessons，之后创建相关需求自动召回。</p></div>
+    <div class="card"><div class="ic">📄</div><b>纯 Markdown</b><p>所有数据是 .requirements/ 下的 Markdown + YAML，任何工具可读，无锁定。</p></div>
+  </div>
+
+  <h2>30 秒理解工作方式</h2>
+  <div class="flow">
+    <div class="fnode">你说：<b>/crs:req 添加用户登录功能</b></div>
+    <div class="farrow"></div>
+    <div class="fnode">系统识别类型 → 确认 → 走 <b>5 阶段文档流程</b>（分析/优先级/测试/计划全部落盘）</div>
+    <div class="farrow"></div>
+    <div class="fnode">你说：<b>开始实现</b> → 按 plan.md 写代码（此刻起守卫解除）</div>
+    <div class="farrow"></div>
+    <div class="fnode">做完验收 → 说：<b>复盘 FEAT-xxx</b> → 经验沉淀，需求关闭</div>
+  </div>
+
+  <div class="callout">
+    <b>阅读建议</b>
+    新用户按顺序读「安装与更新 → 快速上手 → 五阶段流程」即可开始使用；遇到具体问题查「场景手册」和「FAQ」；「架构说明」面向想改代码的维护者。
+  </div>
+</section>
+
+<!-- ================= 安装 ================= -->
+<section class="page" id="install">
+  <h1>安装与更新</h1>
+
+  <h2>安装插件</h2>
+  <p>crs-zcode 仓库同时是插件市场（单仓库模式），在 ZCode 客户端中操作：</p>
+  <div class="steps">
+    <div class="step"><b>添加市场</b><p>打开 <span class="kbd">设置 → 插件管理</span>，在「发现」页点 <span class="kbd">+</span>，输入：</p><pre><code>zxc1213/crs-zcode</code></pre></div>
+    <div class="step"><b>安装插件</b><p>在发现页找到 <b>crs</b> 卡片，点「安装」。新装插件默认启用。</p></div>
+    <div class="step"><b>验证</b><p>任意会话输入 <code>/crs:req</code>（不带参数）——出现引导界面即安装成功。</p></div>
+  </div>
+
+  <h2>更新插件</h2>
+  <p>更新检测<b>靠版本号对比</b>。插件详情页的更新入口只在有新版本时出现——你刚装好时（本地与远程同为 1.0.0）看不到它是正常的。</p>
+  <table>
+    <tr><th>场景</th><th>操作</th></tr>
+    <tr><td>远程发布了新版本</td><td>详情页底部出现<b>更新入口</b>，或收到更新提醒（客户端 v3.11.2+），点击即可</td></tr>
+    <tr><td>没有看到更新入口</td><td>① 确认远程版本确实更高（GitHub 仓库查看 manifest 版本）<br>② 客户端较旧时：卸载后到「发现」页重新安装，效果等同</td></tr>
+  </table>
+
+  <h2>维护者发版流程</h2>
+  <pre><code><span class="c"># 1. bump 版本（package.json）</span>
+npm version patch
+
+<span class="c"># 2. 同步版本号到 plugin.json 与 marketplace.json</span>
+npm run sync-version
+
+<span class="c"># 3. 提交推送 → 用户端"检查更新"即可拉到</span>
+git commit -am <span class="g">"chore: release v1.0.1"</span> &amp;&amp; git push</code></pre>
+  <div class="callout warn">
+    <b>注意</b>
+    git 型插件的更新检测依赖 manifest 版本号。只 push 代码不 bump 版本，客户端不会提示更新。
+  </div>
+</section>
+
+<!-- ================= 快速上手 ================= -->
+<section class="page" id="quickstart">
+  <h1>快速上手</h1>
+
+  <h2>第一条命令</h2>
+  <p>任意项目会话中输入：</p>
+  <pre><code>/crs:req</code></pre>
+  <p><b>不带参数就是引导模式</b>：显示项目状态概览（几个需求、各在什么阶段）和推荐动作。不用背任何命令，跟着推荐走即可。</p>
+
+  <h2>创建第一个需求</h2>
+  <div class="steps">
+    <div class="step"><b>描述需求</b>
+      <p>直接输入描述，例如 <code>/crs:req 添加用户登录功能</code>。不需要记 --bug、--refactor 这些选项——系统自动识别类型并和你确认：</p>
+      <pre><code>📋 识别为「Bug 修复」（将存入 bugs/，ID 前缀 BUG）
+   ▶ 直接回车确认开始
+   a. 改为调整类    r. 改为重构类    q. 快速模式</code></pre>
+    </div>
+    <div class="step"><b>等待 5 阶段文档完成</b>
+      <p>系统自动依次完成：需求解析 → 深度分析 → 优先级评估 → 测试策略 → 实施计划。每阶段结果都会写入文件，你会看到明确的落盘确认。</p>
+    </div>
+    <div class="step"><b>开始实现</b>
+      <p>文档就绪后系统会提示。你只需说：<code>开始实现 FEAT-xxx</code>，按 plan.md 执行。</p>
+    </div>
+    <div class="step"><b>验收并复盘</b>
+      <p>实现完成说 <code>复盘 FEAT-xxx</code>：生成 retro.md、提炼经验教训到 lessons、关闭需求。</p>
+    </div>
+  </div>
+
+  <h2>三个最常用的变体</h2>
+  <table>
+    <tr><th>输入</th><th>适合</th></tr>
+    <tr><td><code>/crs:req --quick 修复按钮颜色</code></td><td>10 分钟内能搞定的小改动：只建骨架，跳过深度分析</td></tr>
+    <tr><td><code>/crs:req --dashboard</code></td><td>看全局：统计、活跃需求、最近动态</td></tr>
+    <tr><td><code>/crs:req --list</code></td><td>列出所有需求及状态</td></tr>
+  </table>
+
+  <div class="callout">
+    <b>首次使用发生了什么？</b>
+    项目还没有 .requirements/ 目录时，创建需求会自动初始化全部目录结构并告诉你创建了什么。无需手动运行任何初始化命令。
+  </div>
+</section>
+
+<!-- ================= 五阶段 ================= -->
+<section class="page" id="workflow">
+  <h1>五阶段流程</h1>
+  <p>这是 CRS 的核心约束：<b>5 个文档阶段全部完成之前，不修改任何项目代码</b>。每个阶段的结果必须写入文件（不是"输出在对话里"）。</p>
+
+  <div class="steps">
+    <div class="step"><b>[1/5] 需求解析 + 初始化</b>
+      <p>经验检索（自动查历史 lessons）→ 安全检查（敏感信息）→ 相似需求检测 → 创建需求目录与骨架文件（meta.yaml、spec/、test-cases/、plan/）。</p>
+    </div>
+    <div class="step"><b>[2/5] 深度分析</b>
+      <p>req-brainstorm 方法论：问题探索 → 方案审查 → 设计展示 → 最终审查。产出写入 spec/ 的 5 个文件（背景、用户故事、设计、接口、决策）。</p>
+    </div>
+    <div class="step"><b>[3/5] 优先级 + 质量检查</b>
+      <p>按五维加权评估：业务价值 40% · 紧急 30% · 依赖 15% · 成本 10% · 风险 5%。结果写入 meta.yaml。</p>
+    </div>
+    <div class="step"><b>[4/5] 测试策略</b>
+      <p>生成正向 / 异常 / 边界三类用例，写入 test-cases/。</p>
+    </div>
+    <div class="step"><b>[5/5] 实施计划</b>
+      <p>任务分解 + 里程碑写入 plan/。完成后提示"文档就绪，可以开始实现"。</p>
+    </div>
+  </div>
+
+  <h2>阶段守卫如何工作</h2>
+  <p>活跃需求处于 <code>planning</code> 或 <code>analyzed</code> 状态时，PostToolUse Hook 检查每次 Edit/Write：</p>
+  <ul>
+    <li>写入 <code>.requirements/</code> 内 → 放行（这是你该干的事）</li>
+    <li>写入项目代码 → <b>注入阶段违规警告</b>，提醒先完成文档流程</li>
+  </ul>
+  <p>状态进入 <code>implementing</code> 后守卫自动解除。</p>
+
+  <h2>执行模式</h2>
+  <table>
+    <tr><th>模式</th><th>行为</th><th>适合</th></tr>
+    <tr><td>默认</td><td>走完 5 阶段，给出下一步建议</td><td>绝大多数需求</td></tr>
+    <tr><td><code>--quick</code></td><td>只建骨架，跳过分析</td><td>小改动、急修</td></tr>
+    <tr><td><code>--auto</code></td><td>文档后自动开始实现</td><td>方向明确的任务</td></tr>
+    <tr><td><code>--conservative</code></td><td>每阶段确认后继续</td><td>高风险/学习模式</td></tr>
+  </table>
+</section>
+
+<!-- ================= 命令参考 ================= -->
+<section class="page" id="commands">
+  <h1>命令参考</h1>
+  <p class="soft">只有 5 个命令。深度分析、测试策略、文档格式等能力作为 skills 在流程内自动协作，无需手动调用。</p>
+
+  <div class="cmdcard">
+    <div class="cname">/crs:req</div>
+    <p><b>主入口</b>。不带参数 = 引导模式（状态概览 + 推荐动作）；带描述 = 创建需求；支持查询选项 --list / --active / --dashboard / --status。</p>
+  </div>
+  <div class="cmdcard">
+    <div class="cname">/crs:req-quality</div>
+    <p><b>质量门禁 + 验收</b>。<code>--gate 1-4</code> 跑对应阶段门禁（设计/测试策略/计划/变更）；<code>--verify implementation</code> 跑人工验收清单。</p>
+  </div>
+  <div class="cmdcard">
+    <div class="cname">/crs:req-priority</div>
+    <p><b>优先级</b>。<code>--list</code> 全量排序；跟需求 ID 重新评估单个需求。</p>
+  </div>
+  <div class="cmdcard">
+    <div class="cname">/crs:req-change</div>
+    <p><b>变更管理</b>。实现中途要改需求时使用：影响评估 → 更新 spec/plan → 自动触发 Gate 4 变更检查。</p>
+  </div>
+  <div class="cmdcard">
+    <div class="cname">/crs:metrics</div>
+    <p><b>度量分析</b>。吞吐、状态分布、质量数据收集与导出。</p>
+  </div>
+
+  <h2>/crs:req 选项速查</h2>
+  <table>
+    <tr><th>选项</th><th>说明</th></tr>
+    <tr><td><code>--feature/-f</code> · <code>--bug/-b</code> · <code>--question/-q</code> · <code>--adjust/-a</code> · <code>--refactor/-r</code></td><td>显式指定类型（不给则自动识别并确认）</td></tr>
+    <tr><td><code>--quick</code></td><td>只建骨架，跳过深度分析</td></tr>
+    <tr><td><code>--auto</code> / <code>--conservative</code></td><td>全自动 / 每步确认</td></tr>
+    <tr><td><code>--list</code> · <code>--active</code> · <code>--status &lt;id&gt;</code> · <code>--dashboard</code></td><td>查询</td></tr>
+    <tr><td><code>复盘 &lt;id&gt;</code>（对话指令）</td><td>完成复盘并关闭需求</td></tr>
+  </table>
+
+  <h2>CLI 工具（Bash 可用）</h2>
+  <pre><code><span class="c"># 相似需求搜索 / 知识图谱统计</span>
+node <span class="k">"$ZCODE_PLUGIN_ROOT/bin/kg-cli.js"</span> search <span class="g">"用户登录"</span> 10
+node <span class="k">"$ZCODE_PLUGIN_ROOT/bin/kg-cli.js"</span> stats
+
+<span class="c"># HTML 报告导出（单文件，可分享）</span>
+node <span class="k">"$ZCODE_PLUGIN_ROOT/bin/crs-export.js"</span> -o report.html</code></pre>
+</section>
+
+<!-- ================= 数据与状态 ================= -->
+<section class="page" id="data">
+  <h1>数据与状态</h1>
+
+  <h2>数据目录</h2>
+  <div class="tree">
+    your-project/<br>
+    └─ <span class="d">.requirements/</span>&nbsp;&nbsp;<span class="cm"># 需求数据（项目本地，可提交 git）</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="d">features/</span> <span class="f">bugs/ questions/ adjustments/ refactorings/</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;└─ <span class="d">FEAT-20260908-001-abc/</span>&nbsp;&nbsp;<span class="cm"># 一个需求一个目录</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="f">meta.yaml</span>&nbsp;&nbsp;<span class="cm"># 元数据：状态、优先级</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="f">raw.md</span>&nbsp;&nbsp;<span class="cm"># 原始描述</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="f">spec.md + spec/</span>&nbsp;&nbsp;<span class="cm"># 设计（5 子文件）</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="f">test-cases.md + test-cases/</span>&nbsp;&nbsp;<span class="cm"># 用例（3 子文件）</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="f">plan.md + plan/</span>&nbsp;&nbsp;<span class="cm"># 计划（2 子文件）</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├─ <span class="f">retro.md</span>&nbsp;&nbsp;<span class="cm"># 复盘（done 时生成）</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─ <span class="f">execution.log</span>&nbsp;&nbsp;<span class="cm"># Hook 自动记录</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;└─ <span class="d">_system/lessons/</span>&nbsp;&nbsp;<span class="cm"># 经验库（成长机制）</span>
+  </div>
+
+  <h2>需求状态生命周期</h2>
+  <table>
+    <tr><th>状态</th><th>含义</th><th>此时能否改代码</th></tr>
+    <tr><td><code>planning</code></td><td>文档阶段（1-2）</td><td>❌ 守卫警告</td></tr>
+    <tr><td><code>analyzed</code></td><td>分析完成，文档阶段（3-5）</td><td>❌ 守卫警告</td></tr>
+    <tr><td><code>implementing</code></td><td>实现中</td><td>✅</td></tr>
+    <tr><td><code>review</code></td><td>验收/复盘</td><td>✅</td></tr>
+    <tr><td><code>done</code></td><td>已关闭</td><td>—</td></tr>
+  </table>
+
+  <h2>索引文件的设计</h2>
+  <p><code>spec.md</code> / <code>test-cases.md</code> / <code>plan.md</code> 是<b>摘要索引</b>：根文件记录子文件清单和「待填充/已填充」状态。阶段完成标准 = 三张索引表全部「已填充」。这让任何人（或 LLM）打开需求目录 10 秒内看清进度。</p>
+</section>
+
+<!-- ================= Hooks ================= -->
+<section class="page" id="hooks">
+  <h1>自动化 Hooks</h1>
+  <p class="soft">装上插件即生效，无需配置。协议：stdin 读 JSON 事件 → stdout 输出 additionalContext 注入会话。</p>
+
+  <table>
+    <tr><th>时机</th><th>脚本</th><th>行为</th></tr>
+    <tr><td><b>SessionStart</b><br>会话启动</td><td><code>session-start.mjs</code></td><td>项目有活跃需求时，自动注入需求 ID 和状态提醒（如"FEAT-xxx 还在 planning，先完成文档"）</td></tr>
+    <tr><td><b>PostToolUse</b><br>每次 Edit/Write/Bash</td><td><code>post-tool-use.mjs</code></td><td>① 记录 execution.log<br>② planning/analyzed 阶段改外部代码 → 阶段违规警告</td></tr>
+    <tr><td><b>Stop</b><br>会话结束</td><td><code>stop.mjs</code></td><td>同步索引表与 plan 进度，输出本次会话执行摘要</td></tr>
+  </table>
+
+  <h2>活跃需求如何判定</h2>
+  <p>扫描 <code>.requirements/*/*/meta.yaml</code>，取状态 ∈ {planning, analyzed, implementing, review} 中创建时间最新的需求。不依赖符号链接，Windows / macOS / Linux 行为一致。</p>
+
+  <div class="callout">
+    <b>手动冒烟测试</b>
+    <pre><code>printf <span class="g">'{"hook_event_name":"SessionStart","cwd":"&lt;项目路径&gt;"}'</span> \
+  | node <span class="k">"$ZCODE_PLUGIN_ROOT/hooks/session-start.mjs"</span></code></pre>
+  </div>
+</section>
+
+<!-- ================= 成长机制 ================= -->
+<section class="page" id="growth">
+  <h1>成长机制</h1>
+  <p>CRS 不只是记录需求——它让<b>经验在项目内复利累积</b>。</p>
+
+  <h2>经验复利闭环</h2>
+  <div class="flow">
+    <div class="fnode">需求 done 前 → 引导填写 <b>retro.md</b>（估时 vs 实际 / 踩坑与解决 / 可复用结论）</div>
+    <div class="farrow"></div>
+    <div class="fnode">提炼通用教训 → <b>_system/lessons/&lt;topic&gt;.md</b>（带 tags 标注适用领域）</div>
+    <div class="farrow"></div>
+    <div class="fnode">下次创建相关需求时（阶段 1）→ <b>自动检索相关 lessons</b> 注入分析上下文</div>
+  </div>
+
+  <h2>lesson 文件格式</h2>
+  <pre><code>---
+tags: [登录, jwt, 安全]
+source: FEAT-20260908-001
+date: 2026-09-08
+---
+JWT 不要放 localStorage（XSS 可窃取），改用 httpOnly cookie。
+适用：所有涉及前端 token 存储的需求。</code></pre>
+
+  <h2>为什么这样设计</h2>
+  <ul>
+    <li><b>不依赖记忆</b>：经验落盘在项目里，换个会话、换个 LLM 都在</li>
+    <li><b>检索而非全量注入</b>：按 tags 相关性召回，不浪费上下文</li>
+    <li><b>retro 是漏斗</b>：不是所有复盘内容都值得留，提炼环节保证 lessons 库信噪比</li>
+  </ul>
+  <p class="soft">跨项目共享（~/.crs/lessons/）规划于 v1.3，见路线图。</p>
+</section>
+
+<!-- ================= 场景手册 ================= -->
+<section class="page" id="scenarios">
+  <h1>场景手册</h1>
+
+  <h3>场景 1：小改动，不想走全流程</h3>
+  <pre><code>/crs:req --quick 修复按钮颜色</code></pre>
+  <p>只生成骨架直接实现。适合 10 分钟内能完成的改动。</p>
+
+  <h3>场景 2：实现中途需求变了</h3>
+  <pre><code>/crs:req-change FEAT-20260908-001 改为支持手机号登录</code></pre>
+  <p>自动评估影响 → 更新 spec 与 plan → 触发 Gate 4 变更检查 → 你继续实现。</p>
+
+  <h3>场景 3：几个需求先做哪个</h3>
+  <pre><code>/crs:req-priority --list</code></pre>
+  <p>按五维评分排序，直接给决策依据。</p>
+
+  <h3>场景 4：实现完了怎么收尾</h3>
+  <pre><code>/crs:req-quality FEAT-20260908-001 --verify implementation   <span class="c"># 人工验收清单</span></code></pre>
+  <p>逐项确认后说 <code>复盘 FEAT-20260908-001</code> → retro + lessons + 关闭，一气呵成。</p>
+
+  <h3>场景 5：想看整体进度 / 汇报</h3>
+  <pre><code>/crs:req --dashboard                                          <span class="c"># 会话内仪表板</span>
+node "$ZCODE_PLUGIN_ROOT/bin/crs-export.js" -o report.html    <span class="c"># 单文件 HTML 报告</span></code></pre>
+
+  <h3>场景 6：旧项目直接用</h3>
+  <p>不需要任何预处理。直接 <code>/crs:req</code>，首次创建需求时自动初始化目录。旧需求（如果原来用 Claude 版 CRS 管理）可手动把目录拷进 .requirements/ 对应类型目录下。</p>
+</section>
+
+<!-- ================= FAQ ================= -->
+<section class="page" id="faq">
+  <h1>常见问题</h1>
+
+  <details open><summary>装好后输入 /crs:req 没反应？</summary>
+    <p>检查三点：① 插件已安装且启用（设置 → 插件管理 → 已安装）；② 会话里输入 <code>/</code> 看命令列表是否有 crs 前缀的命令；③ 重启会话让组件加载。</p>
+  </details>
+  <details><summary>为什么我没看到"检查更新"按钮？</summary>
+    <p>更新入口只在新版本可用时出现。刚装好时本地与远程版本一致（1.0.0），没有按钮是正常的。等仓库发布更高版本后，详情页底部会出现更新入口（客户端 v3.11.2+ 还会有提醒）。客户端较旧时，卸载后到发现页重新安装等效。</p>
+  </details>
+  <details><summary>阶段守卫一直警告，我想先改代码？</summary>
+    <p>把 meta.yaml 的 status 改为 implementing 即可解除；或者用 <code>--quick</code> 从一开始就跳过深度流程。守卫的目的是让你有意识地跳过，而不是无意间绕过。</p>
+  </details>
+  <details><summary>.requirements/ 要提交到 git 吗？</summary>
+    <p>建议提交。它是纯 Markdown + YAML，团队共享需求上下文；execution.log 和临时文件可以在 .gitignore 里排除。</p>
+  </details>
+  <details><summary>和其他 AI 工具（Claude Code 等）共用项目冲突吗？</summary>
+    <p>不冲突。数据是纯文本，任何工具可读。原 Claude 版 CRS 管理的历史需求目录可以直接拷入对应类型目录继续使用。</p>
+  </details>
+  <details><summary>lessons 越积越多会不会污染上下文？</summary>
+    <p>召回是按 tags 相关性筛选的，只注入与当前需求相关的少数几条。保持每个 lesson 聚焦一个主题、tags 准确，信噪比就有保障。</p>
+  </details>
+  <details><summary>怎么彻底卸载？</summary>
+    <p>设置 → 插件管理 → 已安装 → crs → 卸载。项目数据 .requirements/ 完全保留在项目里，不受影响；不需要时手动删除即可。</p>
+  </details>
+</section>
+
+<!-- ================= 架构 ================= -->
+<section class="page" id="architecture">
+  <h1>架构说明</h1>
+
+  <h2>四层模型</h2>
+  <div class="tree">
+    <span class="d">用户入口层</span>&nbsp;&nbsp;commands/（5 个命令，用户显式调用）<br>
+    <span class="d">智能协作层</span>&nbsp;&nbsp;skills/（8 个 skill，LLM 按需读取的流程指令）<br>
+    <span class="d">核心引擎层</span>&nbsp;&nbsp;scripts/（纯 Node ESM，平台无关，不依赖 skills）<br>
+    <span class="d">自动守护层</span>&nbsp;&nbsp;hooks/（ZCode 生命周期钩子）
+  </div>
+  <div class="callout"><b>关键解耦</b>引擎调度的是 ZCode 通用 skills（brainstorming / writing-plans 等），不依赖任何 req-* skill——调整 skills/commands 不影响引擎，反之亦然。</div>
+
+  <h2>引擎模块</h2>
+  <table>
+    <tr><th>模块</th><th>职责</th></tr>
+    <tr><td><code>requirement-manager/core/processor.js</code></td><td>需求创建 / 状态机 / 骨架生成 / 模板渲染</td></tr>
+    <tr><td><code>requirement-manager/core/scheduler.js</code></td><td>执行计划与 skill 调用链</td></tr>
+    <tr><td><code>requirement-manager/core/router.js</code></td><td>意图识别与路由</td></tr>
+    <tr><td><code>requirement-manager/features/</code></td><td>安全过滤、相似度检测</td></tr>
+    <tr><td><code>requirement-manager/utils/plan-sync.js</code></td><td>plan 进度与 meta.yaml 状态同步</td></tr>
+    <tr><td><code>knowledge-graph/</code></td><td>Fuse.js 相似需求搜索</td></tr>
+    <tr><td><code>export/</code> · <code>metrics/</code></td><td>HTML 报告导出 · 度量收集</td></tr>
+  </table>
+
+  <h2>从原版 crs-plugin 的关键演进</h2>
+  <table>
+    <tr><th>项</th><th>原版</th><th>本版</th></tr>
+    <tr><td>平台</td><td>5 平台兼容层</td><td>仅 ZCode</td></tr>
+    <tr><td>hooks 引导</td><td>92 行 bootstrap 探测</td><td><code>${ZCODE_PLUGIN_ROOT}</code></td></tr>
+    <tr><td>活跃需求</td><td>ACTIVE 符号链接（从未被创建，守卫形同虚设）</td><td>扫描 meta.yaml（真正生效）</td></tr>
+    <tr><td>执行日志</td><td>写入/读取路径不一致（总结永远为空）</td><td>统一写入需求目录</td></tr>
+    <tr><td>命令/技能</td><td>13 + 13</td><td><b>5 + 8</b>，其余并入引导与 skills</td></tr>
+    <tr><td>成长机制</td><td>无</td><td>retro → lessons → 自动召回</td></tr>
+  </table>
+  <p class="soft">完整差异与死代码清理记录见仓库 docs/ARCHITECTURE.md。</p>
+</section>
+
+<!-- ================= 路线图 ================= -->
+<section class="page" id="roadmap">
+  <h1>演进路线</h1>
+  <p class="soft">原则：每个版本一个主题；每项改动有测试保护；体验优先于功能数量。</p>
+
+  <h2>v1.1 引导与成长 <span class="badge">当前</span></h2>
+  <ul>
+    <li>✅ /crs:req 引导模式与对话式类型确认</li>
+    <li>✅ 复盘机制（retro.md）+ lessons 沉淀与自动召回</li>
+    <li>✅ 死代码清理（optimization/ ~1300 行、conversation-logger/、demo.js）</li>
+  </ul>
+
+  <h2>v1.2 引擎重构</h2>
+  <ul>
+    <li>processor.js（553 行）拆分为模板渲染 / 创建 / 状态机三模块</li>
+    <li>scheduler 去 Claude 时代 adapter 遗产，只管阶段顺序</li>
+    <li>项目级配置：.requirements/_system/config.yaml（优先级权重、门禁阈值）</li>
+    <li>验收标准：核心链路任一环节，新维护者 10 分钟定位到代码</li>
+  </ul>
+
+  <h2>v1.3 生态与反馈</h2>
+  <ul>
+    <li>metrics 迭代视图：吞吐量、返工率、估时准确度</li>
+    <li>复盘数据驱动：估时偏差回写优先级权重建议</li>
+    <li>跨项目 lessons 库（~/.crs/lessons/）</li>
+  </ul>
+
+  <h2>反模式（明确不做）</h2>
+  <ul>
+    <li>❌ 重新支持多平台</li>
+    <li>❌ 命令数量超过 5 个</li>
+    <li>❌ 引入数据库 / 运行时配置 UI —— Markdown + YAML 是数据底线</li>
+  </ul>
+  <p class="soft">完整路线见仓库 docs/ROADMAP.md。</p>
+
+  <div class="footer">
+    CRS for ZCode · MIT License ·
+    <a href="https://github.com/zxc1213/crs-zcode" target="_blank">github.com/zxc1213/crs-zcode</a> ·
+    本手册随插件一同发布，最新版见仓库 docs/manual.html
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+  // ===== 导航 + 分页 =====
+  var links = document.querySelectorAll('#nav a');
+  var pages = document.querySelectorAll('.page');
+
+  function show(id, push) {
+    pages.forEach(function (p) { p.classList.toggle('active', p.id === id); });
+    links.forEach(function (a) {
+      a.classList.toggle('active', a.getAttribute('href') === '#' + id);
+    });
+    if (push) history.replaceState(null, '', '#' + id);
+    window.scrollTo({ top: 0 });
+    clearSearch();
+  }
+
+  links.forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      show(a.getAttribute('href').slice(1), true);
+    });
+  });
+
+  // URL 锚点直达
+  if (location.hash && document.getElementById(location.hash.slice(1))) {
+    show(location.hash.slice(1), false);
+  }
+
+  // ===== 主题 =====
+  var themeBtn = document.getElementById('themeBtn');
+  var saved = null;
+  try { saved = localStorage.getItem('crs-manual-theme'); } catch (e) {}
+  if (saved === 'dark') { document.documentElement.setAttribute('data-theme', 'dark'); themeBtn.textContent = '☀️'; }
+  themeBtn.addEventListener('click', function () {
+    var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark');
+    themeBtn.textContent = dark ? '🌙' : '☀️';
+    try { localStorage.setItem('crs-manual-theme', dark ? 'light' : 'dark'); } catch (e) {}
+  });
+
+  // ===== 搜索：跨页全文过滤 =====
+  var searchInput = document.getElementById('search');
+  var hint = document.createElement('div');
+  hint.className = 'searchhint';
+  searchInput.parentNode.appendChild(hint);
+
+  function clearSearch() {
+    if (searchInput.value) { searchInput.value = ''; runSearch(); }
+  }
+
+  function runSearch() {
+    var q = searchInput.value.trim().toLowerCase();
+    hint.style.display = 'block';
+    if (!q) {
+      pages.forEach(function (p) {
+        p.classList.remove('active');
+        p.querySelectorAll('mark').forEach(function (m) {
+          m.replaceWith(document.createTextNode(m.textContent));
+        });
+      });
+      var first = document.querySelector('.page') || pages[0];
+      first.classList.add('active');
+      hint.textContent = '';
+      return;
+    }
+    var total = 0, found = [];
+    pages.forEach(function (p) {
+      var hits = 0;
+      var walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, {
+        acceptNode: function (n) {
+          if (!n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+          var tag = n.parentNode.nodeName;
+          if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'MARK') return NodeFilter.FILTER_REJECT;
+          return n.nodeValue.toLowerCase().indexOf(q) >= 0 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+        }
+      });
+      var nodes = [];
+      while (walker.nextNode()) nodes.push(walker.currentNode);
+      nodes.forEach(function (n) {
+        var i = n.nodeValue.toLowerCase().indexOf(q);
+        var range = document.createRange();
+        range.setStart(n, i); range.setEnd(n, i + q.length);
+        var mark = document.createElement('mark');
+        try { range.surroundContents(mark); hits++; } catch (e) {}
+      });
+      p.classList.toggle('active', hits > 0);
+      if (hits > 0) { total += hits; found.push(p.id + '(' + hits + ')'); }
+    });
+    hint.textContent = q ? ('共 ' + total + ' 处匹配 · 命中页: ' + found.join(', ')) : '';
+    if (total === 0 && q) {
+      pages.forEach(function (p) { p.classList.remove('active'); });
+      hint.textContent = '未找到「' + searchInput.value + '」，换个关键词试试';
+    }
+  }
+
+  var t = null;
+  searchInput.addEventListener('input', function () {
+    clearTimeout(t); t = setTimeout(runSearch, 200);
+  });
+  searchInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { clearSearch(); searchInput.blur(); }
+  });
+</script>
+</body>
+</html>

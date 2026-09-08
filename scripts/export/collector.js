@@ -193,6 +193,148 @@ async function collectProject(requirementsDir) {
 }
 
 /**
+ * 收集时间线（项目历史唯一事实源）
+ *
+ * 优先读 project/timeline.yaml 事件账本（引擎维护，全量）；
+ * 旧项目无账本时回退解析 changelog.md / sync_log（兼容）。
+ * @param {string} requirementsDir
+ * @returns {Promise<{events: object[], source: 'timeline'|'changelog'}>}
+ */
+async function collectTimeline(requirementsDir) {
+  const baseDir = path.dirname(requirementsDir);
+  try {
+    const { readTimeline } = await import('../requirement-manager/project-sync/timeline.js');
+    const { events } = await readTimeline(baseDir);
+    if (events.length > 0) {
+      return {
+        source: 'timeline',
+        events: events.map((e) => ({
+          timestamp: e.ts,
+          type: e.type,
+          reqId: e.reqId || null,
+          title: e.title || '',
+          summary: e.summary || '',
+        })),
+      };
+    }
+  } catch (_error) {
+    // 账本不可用回退 changelog
+  }
+
+  const changelogEntries = await collectChangelog(requirementsDir);
+  return {
+    source: 'changelog',
+    events: changelogEntries.map((e) => ({
+      timestamp: e.timestamp,
+      type: 'project_synced',
+      reqId: e.reqId,
+      title: e.title,
+      summary: '',
+    })),
+  };
+}
+
+/**
+ * 收集经验库（_system/lessons）
+ * @param {string} requirementsDir
+ * @returns {Promise<object[]>} [{ topic, tags, source, date, lesson }]
+ */
+async function collectLessons(requirementsDir) {
+  const lessonsDir = path.join(requirementsDir, '_system', 'lessons');
+  if (!(await exists(lessonsDir))) return [];
+
+  let entries = [];
+  try {
+    entries = await fs.readdir(lessonsDir, { withFileTypes: true });
+  } catch (_error) {
+    return [];
+  }
+
+  const lessons = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
+    const content = await readFileSafe(path.join(lessonsDir, entry.name));
+    if (!content) continue;
+
+    // frontmatter（tags/source/date）
+    let front = {};
+    const fm = content.match(/^---\n([\s\S]*?)\n---\n/);
+    if (fm) {
+      try {
+        front = yaml.load(fm[1]) || {};
+      } catch (_error) {
+        front = {};
+      }
+    }
+    const body = content.replace(/^---\n[\s\S]*?\n---\n/, '').trim();
+    const firstLine = body.split('\n').map((l) => l.trim()).find((l) => l && !l.startsWith('#')) || '';
+
+    lessons.push({
+      topic: entry.name.replace(/\.md$/, ''),
+      tags: Array.isArray(front.tags) ? front.tags : [],
+      source: front.source || '',
+      date: front.date || '',
+      lesson: firstLine,
+    });
+  }
+  return lessons.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+}
+
+/**
+ * 收集复盘洞察（各需求的 retro.md 踩坑提炼）
+ * @param {string} requirementsDir
+ * @param {object[]} requirements - 已收集的需求（提供 id/title 定位）
+ * @returns {Promise<object[]>} [{ reqId, title, pitfalls: string[] }]
+ */
+async function collectRetroInsights(requirementsDir, requirements) {
+  const insights = [];
+  for (const req of requirements) {
+    const retro = await readFileSafe(path.join(req.rawPath, 'retro.md'));
+    if (!retro) continue;
+
+    // 提取"踩坑"章节的要点行
+    const pitfalls = [];
+    const section = retro.match(/##\s*[^\n]*踩坑[^\n]*\n([\s\S]*?)(?=\n##\s|$)/);
+    if (section) {
+      for (const line of section[1].split('\n')) {
+        const m = line.match(/^\s*[-*]\s+(.+)/);
+        if (m && m[1].trim()) pitfalls.push(m[1].trim());
+      }
+    }
+
+    insights.push({
+      reqId: req.id,
+      title: req.title,
+      pitfalls,
+      hasRetro: true,
+    });
+  }
+  return insights;
+}
+
+/**
+ * 收集文档地图（含漂移状态）
+ * @param {string} requirementsDir
+ * @returns {Promise<object|null>} { docs, drift: { stale, unconfirmed } }
+ */
+async function collectDocsMap(requirementsDir) {
+  const baseDir = path.dirname(requirementsDir);
+  try {
+    const { readDocsMap, checkDrift } = await import('../requirement-manager/project-sync/docs-map.js');
+    const { docs, exists: mapExists } = await readDocsMap(baseDir);
+    if (!mapExists || docs.length === 0) return null;
+    const drift = await checkDrift(baseDir);
+    return {
+      docs,
+      stale: drift.stale.map((d) => d.path),
+      unconfirmed: drift.unconfirmed.map((d) => d.path),
+    };
+  } catch (_error) {
+    return null;
+  }
+}
+
+/**
  * 解析 changelog.md 中的时间线条目
  * @param {string} requirementsDir
  * @returns {Promise<object[]>}
@@ -274,6 +416,10 @@ export async function collect(requirementsDir, options = {}) {
   const { requirements, warnings } = await collectAllRequirements(requirementsDir, options.hooks || {});
   const project = await collectProject(requirementsDir);
   const changelog = await collectChangelog(requirementsDir);
+  const timeline = await collectTimeline(requirementsDir);
+  const lessons = await collectLessons(requirementsDir);
+  const retroInsights = await collectRetroInsights(requirementsDir, requirements);
+  const docsMap = await collectDocsMap(requirementsDir);
   const stats = computeStats(requirements);
 
   const meta = {
@@ -289,6 +435,10 @@ export async function collect(requirementsDir, options = {}) {
     project,
     requirements,
     changelog,
+    timeline,
+    lessons,
+    retroInsights,
+    docsMap,
     stats,
     warnings,
   };

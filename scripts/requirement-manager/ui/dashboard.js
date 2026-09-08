@@ -15,6 +15,7 @@ import {
   STATUSES,
   STATUS_LABELS,
   STATUS_COLORS,
+  EVENT_LABELS,
   normalizeMeta,
   isActiveStatus,
   requirementDate,
@@ -200,6 +201,43 @@ export class Dashboard {
     });
 
     return allReqs.slice(0, limit);
+  }
+
+  /**
+   * 显示历史时间线（来自 project/timeline.yaml 事件账本）
+   * @param {number} limit - 显示最近 N 条（默认 20）
+   */
+  async showHistory(limit = 20) {
+    console.log(chalk.cyan(`📜 历史时间线（最近 ${limit} 条事件）`));
+
+    let events = [];
+    try {
+      const { readTimeline } = await import('../project-sync/timeline.js');
+      const result = await readTimeline(this.baseDir, { limit });
+      events = result.events;
+    } catch (_error) {
+      // 账本不可用
+    }
+
+    if (events.length === 0) {
+      console.log(chalk.gray('  暂无历史事件（事件随需求创建/变更/同步自动积累）'));
+      console.log('');
+      return;
+    }
+
+    const table = new Table({
+      head: [chalk.white('时间'), chalk.white('事件'), chalk.white('需求'), chalk.white('说明')],
+      colWidths: [21, 12, 23, 42],
+      style: { head: [], border: ['gray'] },
+    });
+
+    for (const e of events) {
+      const ts = (e.ts || '').replace('T', ' ').slice(0, 19);
+      table.push([ts, EVENT_LABELS[e.type] || e.type, e.reqId || '-', (e.summary || e.title || '').slice(0, 38)]);
+    }
+
+    console.log(table.toString());
+    console.log('');
   }
 
   /**

@@ -225,26 +225,89 @@ describe('Export Renderer - 项目级文档', () => {
 });
 
 describe('Export Renderer - 时间线', () => {
-  it('空 changelog 显示提示', () => {
+  it('空时间线显示提示', () => {
     const html = render(makeData());
-    expect(html).to.include('暂无变更记录');
+    expect(html).to.include('暂无历史记录');
   });
 
-  it('渲染 changelog 条目', () => {
+  it('渲染时间线事件（含类型徽章与需求 ID）', () => {
     const data = makeData({
-      changelog: [
-        {
-          timestamp: '2026-06-13T10:00:00Z',
-          title: 'requirement-done',
-          reqId: 'FEAT-001',
-          action: 'requirement-done',
-          actor: 'system',
-        },
-      ],
+      timeline: {
+        source: 'timeline',
+        events: [
+          { timestamp: '2026-06-13T10:00:00Z', type: 'requirement_changed', reqId: 'FEAT-001', title: '报表导出', summary: '[medium] 客户要求 CSV' },
+          { timestamp: '2026-06-13T11:00:00Z', type: 'lesson_saved', reqId: 'FEAT-001', title: '导出模式', summary: '大文件用流式导出' },
+        ],
+      },
     });
     const html = render(data);
     expect(html).to.include('timeline-item');
     expect(html).to.include('FEAT-001');
+    expect(html).to.include('event-badge');
+    expect(html).to.include('需求变更');
+    expect(html).to.include('经验沉淀');
+    expect(html).to.include('2 条事件');
+  });
+
+  it('changelog 回退源渲染提示', () => {
+    const data = makeData({
+      timeline: {
+        source: 'changelog',
+        events: [{ timestamp: '2026-06-13T10:00:00Z', type: 'project_synced', reqId: 'FEAT-001', title: 'requirement-done', summary: '' }],
+      },
+    });
+    const html = render(data);
+    expect(html).to.include('来自 changelog 解析');
+  });
+});
+
+describe('Export Renderer - 成长档案', () => {
+  it('lessons 渲染经验库', () => {
+    const data = makeData({
+      lessons: [{ topic: 'jwt-login', tags: ['登录', 'jwt'], source: 'FEAT-20260908-001', date: '2026-09-08', lesson: 'token 过期要静默刷新' }],
+    });
+    const html = render(data);
+    expect(html).to.include('成长档案');
+    expect(html).to.include('经验库（1 条）');
+    expect(html).to.include('token 过期要静默刷新');
+  });
+
+  it('retroInsights 渲染踩坑沉淀', () => {
+    const data = makeData({
+      retroInsights: [{ reqId: 'FEAT-20260908-001', title: '报表导出', pitfalls: ['Windows 路径分隔符导致导出失败'], hasRetro: true }],
+    });
+    const html = render(data);
+    expect(html).to.include('踩坑沉淀');
+    expect(html).to.include('Windows 路径分隔符导致导出失败');
+  });
+
+  it('无 lessons 且无踩坑时不渲染成长档案', () => {
+    const html = render(makeData());
+    expect(html).to.not.include('成长档案');
+  });
+});
+
+describe('Export Renderer - 文档地图', () => {
+  it('渲染宿主文档纳管状态', () => {
+    const data = makeData({
+      docsMap: {
+        docs: [
+          { path: 'README.md', role: 'readme', sync_on: 'done' },
+          { path: 'docs/architecture.md', role: 'architecture', sync_on: 'change' },
+        ],
+        stale: ['docs/architecture.md'],
+        unconfirmed: [],
+      },
+    });
+    const html = render(data);
+    expect(html).to.include('文档地图');
+    expect(html).to.include('README.md');
+    expect(html).to.include('可能过期');
+  });
+
+  it('无 docsMap 时不渲染文档地图', () => {
+    const html = render(makeData());
+    expect(html).to.not.include('id="docs-map"');
   });
 });
 

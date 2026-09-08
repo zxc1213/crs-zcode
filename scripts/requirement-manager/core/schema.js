@@ -84,6 +84,21 @@ export const EVENT_TYPES = [
 /** 变更级别（req-change 三级分类） */
 export const CHANGE_LEVELS = ['small', 'medium', 'large'];
 
+/** 时间线事件中文标签（终端与 HTML 报告共用） */
+export const EVENT_LABELS = {
+  requirement_created: '需求创建',
+  status_changed: '状态流转',
+  requirement_changed: '需求变更',
+  bug_fixed: 'Bug 修复',
+  design_change: '设计变更',
+  project_synced: '文档同步',
+  full_resync: '全量重建',
+  retro_completed: '复盘完成',
+  lesson_saved: '经验沉淀',
+  docs_registered: '文档登记',
+  docs_drift_detected: '文档过期',
+};
+
 /**
  * 旧状态词表 → 规范状态（读取侧兼容）
  * @param {string} status - meta.yaml 中的 status 值
@@ -166,6 +181,7 @@ export default {
   LEGACY_TYPE_DIRS,
   DATE_FIELDS,
   EVENT_TYPES,
+  EVENT_LABELS,
   CHANGE_LEVELS,
   normalizeStatus,
   isActiveStatus,

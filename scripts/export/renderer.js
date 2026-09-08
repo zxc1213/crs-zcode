@@ -9,6 +9,22 @@
 import { escapeHtml, escapeAttr, truncate, formatDate } from './utils.js';
 import { renderMarkdown } from './markdown.js';
 import { REQ_TYPE_LABELS, STATUS_LABELS, STATUS_COLORS, PRIORITY_COLORS } from './types.js';
+import { EVENT_LABELS } from '../requirement-manager/core/schema.js';
+
+/** 时间线事件徽章颜色 */
+const EVENT_COLORS = {
+  requirement_created: '#3b82f6',
+  status_changed: '#9ca3af',
+  requirement_changed: '#f59e0b',
+  bug_fixed: '#ef4444',
+  design_change: '#8b5cf6',
+  project_synced: '#10b981',
+  full_resync: '#6b7280',
+  retro_completed: '#06b6d4',
+  lesson_saved: '#d946ef',
+  docs_registered: '#84cc16',
+  docs_drift_detected: '#f97316',
+};
 
 /**
  * 渲染入口
@@ -53,7 +69,21 @@ function renderHead(data, title, options) {
  * 渲染 <body>
  */
 function renderBody(data, options) {
-  return [renderHeader(data, options), renderOverview(data), renderStatusChart(data), !options.noMermaid ? renderDepGraph(data) : '', renderReqList(data), renderChangelogTimeline(data), renderReqDetails(data), renderProject(data), renderFooter(data, options)].filter(Boolean).join('\n');
+  return [
+    renderHeader(data, options),
+    renderOverview(data),
+    renderStatusChart(data),
+    !options.noMermaid ? renderDepGraph(data) : '',
+    renderReqList(data),
+    renderTimeline(data),
+    renderGrowth(data),
+    renderReqDetails(data),
+    renderProject(data),
+    renderDocsMap(data),
+    renderFooter(data, options),
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 /**
@@ -320,38 +350,123 @@ function renderReqList(data) {
 }
 
 /**
- * Changelog 时间线
+ * 历史时间线（全量，来自 timeline 事件账本；旧项目回退 changelog）
  */
-function renderChangelogTimeline(data) {
-  const { changelog } = data;
-  if (!changelog || changelog.length === 0) {
+function renderTimeline(data) {
+  const timeline = data.timeline;
+  const events = timeline?.events || [];
+  if (events.length === 0) {
     return `
     <section class="section">
-      <h2 id="changelog">变更时间线</h2>
-      <p class="empty">暂无变更记录</p>
+      <h2 id="timeline">历史时间线</h2>
+      <p class="empty">暂无历史记录</p>
     </section>`;
   }
 
-  const items = changelog
-    .slice(0, 20)
-    .map(
-      (entry) => `
-      <div class="timeline-item">
-        <div class="timeline-dot"></div>
+  const sourceNote = timeline.source === 'timeline' ? '' : `<p class="hint small">旧项目：来自 changelog 解析，运行任意 /crs:req 流程后将自动启用事件账本</p>`;
+
+  const items = events
+    .map((e) => {
+      const label = EVENT_LABELS[e.type] || e.type;
+      const color = EVENT_COLORS[e.type] || '#6b7280';
+      return `
+      <div class="timeline-item" data-event-type="${escapeAttr(e.type)}">
+        <div class="timeline-dot" style="background:${color}"></div>
         <div class="timeline-content">
-          <div class="timeline-time">${formatDate(entry.timestamp)}</div>
-          <div class="timeline-title">${escapeHtml(entry.title || entry.action)}</div>
-          ${entry.reqId ? `<div class="timeline-meta">需求：<code>${escapeHtml(entry.reqId)}</code></div>` : ''}
+          <div class="timeline-time">${formatDate(e.timestamp)}</div>
+          <div class="timeline-title"><span class="event-badge" style="background:${color}">${escapeHtml(label)}</span> ${escapeHtml(e.title || '')}</div>
+          ${e.reqId ? `<div class="timeline-meta">需求：<code>${escapeHtml(e.reqId)}</code></div>` : ''}
+          ${e.summary ? `<div class="timeline-meta">${escapeHtml(truncate(e.summary, 160))}</div>` : ''}
         </div>
+      </div>`;
+    })
+    .join('');
+
+  return `
+  <section class="section">
+    <h2 id="timeline">历史时间线 <span class="count">(${events.length} 条事件)</span></h2>
+    ${sourceNote}
+    <div class="timeline">
+      ${items}
+    </div>
+  </section>`;
+}
+
+/**
+ * 成长档案：复盘洞察 + 经验库
+ */
+function renderGrowth(data) {
+  const lessons = data.lessons || [];
+  const retroInsights = (data.retroInsights || []).filter((r) => r.pitfalls.length > 0);
+
+  if (lessons.length === 0 && retroInsights.length === 0) return '';
+
+  const lessonItems = lessons
+    .map(
+      (l) => `
+      <li class="lesson-item">
+        <div class="lesson-lesson">${escapeHtml(truncate(l.lesson || l.topic, 200))}</div>
+        <div class="lesson-meta">
+          ${l.date ? `<span>${escapeHtml(l.date)}</span>` : ''}
+          ${l.source ? `<span>来源 <code>${escapeHtml(l.source)}</code></span>` : ''}
+          ${l.tags.map((t) => `<span class="tag">#${escapeHtml(t)}</span>`).join(' ')}
+        </div>
+      </li>`
+    )
+    .join('');
+
+  const retroItems = retroInsights
+    .map(
+      (r) => `
+      <div class="retro-item">
+        <div class="retro-title"><code>${escapeHtml(r.reqId)}</code> ${escapeHtml(truncate(r.title, 60))}</div>
+        <ul class="pitfall-list">
+          ${r.pitfalls.map((p) => `<li>${escapeHtml(truncate(p, 200))}</li>`).join('')}
+        </ul>
       </div>`
     )
     .join('');
 
   return `
   <section class="section">
-    <h2 id="changelog">变更时间线 <span class="count">(${changelog.length})</span></h2>
-    <div class="timeline">
-      ${items}
+    <h2 id="growth">成长档案</h2>
+    ${lessons.length ? `<h3 class="sub-heading">经验库（${lessons.length} 条）</h3><ul class="lesson-list">${lessonItems}</ul>` : ''}
+    ${retroItems ? `<h3 class="sub-heading">踩坑沉淀（来自复盘）</h3>${retroItems}` : ''}
+  </section>`;
+}
+
+/**
+ * 文档地图（宿主项目外部文档纳管状态）
+ */
+function renderDocsMap(data) {
+  const docsMap = data.docsMap;
+  if (!docsMap || docsMap.docs.length === 0) return '';
+
+  const staleSet = new Set(docsMap.stale);
+  const unconfirmedSet = new Set(docsMap.unconfirmed);
+
+  const rows = docsMap.docs
+    .map((d) => {
+      const stale = staleSet.has(d.path);
+      const unconfirmed = !stale && unconfirmedSet.has(d.path);
+      const status = stale
+        ? '<span class="status-pill" style="background:#f59e0b">⚠ 可能过期</span>'
+        : unconfirmed
+          ? '<span class="status-pill" style="background:#9ca3af">未确认</span>'
+          : '<span class="status-pill" style="background:#10b981">✓ 无漂移</span>';
+      return `<tr><td><code>${escapeHtml(d.path)}</code></td><td>${escapeHtml(d.role)}</td><td>${escapeHtml(d.sync_on)}</td><td>${status}</td></tr>`;
+    })
+    .join('');
+
+  return `
+  <section class="section">
+    <h2 id="docs-map">文档地图 <span class="count">(${docsMap.docs.length} 份宿主文档)</span></h2>
+    <p class="hint small">宿主项目自身文档的纳管状态；可能过期的文档建议在里程碑时同步更新</p>
+    <div class="table-wrap">
+      <table class="req-table">
+        <thead><tr><th>路径</th><th>角色</th><th>同步时机</th><th>状态</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
     </div>
   </section>`;
 }
@@ -633,6 +748,16 @@ const CSS = `
   .timeline-time { color: #6b7280; font-size: 12px; }
   .timeline-title { font-weight: 500; }
   .timeline-meta { color: #6b7280; font-size: 13px; margin-top: 4px; }
+  .event-badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; color: #fff; font-weight: 500; margin-right: 6px; }
+  .sub-heading { margin: 16px 0 8px 0; color: #374151; font-size: 15px; font-weight: 600; }
+  .lesson-list { list-style: none; padding: 0; margin: 0; }
+  .lesson-item { padding: 8px 12px; background: #f9fafb; border-radius: 4px; margin-bottom: 6px; }
+  .lesson-lesson { font-size: 14px; }
+  .lesson-meta { margin-top: 4px; font-size: 12px; color: #6b7280; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .retro-item { padding: 8px 12px; background: #f9fafb; border-radius: 4px; margin-bottom: 8px; }
+  .retro-title { font-weight: 500; margin-bottom: 4px; }
+  .pitfall-list { margin: 4px 0 0 0; padding-left: 20px; color: #4b5563; font-size: 13px; }
+  .pitfall-list li { margin-bottom: 2px; }
   details.req-detail, details.project-doc { background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 16px; margin-bottom: 8px; }
   details.req-detail summary, details.project-doc summary { cursor: pointer; font-weight: 500; color: #111827; padding: 4px 0; }
   details.req-detail summary code { margin-right: 8px; }

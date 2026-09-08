@@ -165,6 +165,75 @@ describe('Export Collector', () => {
     expect(result.meta.totalReqs).to.equal(0);
   });
 
+  it('时间线优先读事件账本，无账本回退 changelog', async () => {
+    // 先无 timeline：回退 changelog
+    const projectDir = safeJoin(TEST_BASE, '.requirements', 'project');
+    await fs.mkdir(projectDir, { recursive: true });
+    await fs.writeFile(path.join(projectDir, 'changelog.md'), '# 项目变更历史\n\n---\n\n## [2026-06-13T10:00:00.000Z] requirement-done\n\n- **来源**: FEAT-001\n', 'utf-8');
+
+    const fallback = await collect(path.join(TEST_BASE, '.requirements'));
+    expect(fallback.timeline.source).to.equal('changelog');
+    expect(fallback.timeline.events).to.have.lengthOf(1);
+
+    // 有 timeline：优先账本
+    const { appendEvent } = await import('../../scripts/requirement-manager/project-sync/timeline.js');
+    await appendEvent(TEST_BASE, { type: 'requirement_created', reqId: 'FEAT-20260613-001-abc123', title: 'A', summary: '创建' });
+    await appendEvent(TEST_BASE, { type: 'requirement_changed', reqId: 'FEAT-20260613-001-abc123', summary: '[medium] 调整' });
+
+    const preferred = await collect(path.join(TEST_BASE, '.requirements'));
+    expect(preferred.timeline.source).to.equal('timeline');
+    expect(preferred.timeline.events).to.have.lengthOf(2);
+    expect(preferred.timeline.events[0].type).to.equal('requirement_changed'); // 最新在前
+  });
+
+  it('收集 lessons（frontmatter + 首行教训）', async () => {
+    const lessonsDir = safeJoin(TEST_BASE, '.requirements', '_system', 'lessons');
+    await fs.mkdir(lessonsDir, { recursive: true });
+    await fs.writeFile(
+      path.join(lessonsDir, 'jwt-refresh.md'),
+      '---\ntags:\n  - 登录\n  - jwt\nsource: FEAT-20260908-001\ndate: 2026-09-08\n---\n\n# JWT 刷新\n\ntoken 过期要静默刷新，不要弹登录框。\n适用条件：前端 SPA。',
+      'utf-8'
+    );
+
+    const result = await collect(path.join(TEST_BASE, '.requirements'));
+    expect(result.lessons).to.have.lengthOf(1);
+    expect(result.lessons[0].topic).to.equal('jwt-refresh');
+    expect(result.lessons[0].tags).to.deep.equal(['登录', 'jwt']);
+    expect(result.lessons[0].source).to.equal('FEAT-20260908-001');
+    expect(result.lessons[0].lesson).to.include('静默刷新');
+  });
+
+  it('收集 retro 踩坑洞察', async () => {
+    const dir = await setupRequirement('feature', 'FEAT-20260613-001-abc123', {
+      id: 'FEAT-20260613-001-abc123',
+      type: 'feature',
+      title: '报表导出',
+      status: 'done',
+    });
+    await fs.writeFile(
+      path.join(dir, 'retro.md'),
+      '# 复盘\n\n## 踩坑与解决\n\n- Windows 路径分隔符导致导出失败\n- 大文件要流式写入\n\n## 可复用结论\n\n- 用 path.join 拼路径\n',
+      'utf-8'
+    );
+
+    const result = await collect(path.join(TEST_BASE, '.requirements'));
+    expect(result.retroInsights).to.have.lengthOf(1);
+    expect(result.retroInsights[0].pitfalls).to.deep.equal(['Windows 路径分隔符导致导出失败', '大文件要流式写入']);
+  });
+
+  it('收集文档地图与漂移状态', async () => {
+    await fs.writeFile(path.join(TEST_BASE, 'README.md'), '# readme\n', 'utf-8');
+    const { registerDoc } = await import('../../scripts/requirement-manager/project-sync/docs-map.js');
+    await registerDoc(TEST_BASE, { path: 'README.md', role: 'readme' });
+
+    const result = await collect(path.join(TEST_BASE, '.requirements'));
+    expect(result.docsMap).to.not.be.null;
+    expect(result.docsMap.docs).to.have.lengthOf(1);
+    expect(result.docsMap.docs[0].path).to.equal('README.md');
+    // 从未复核过 → unconfirmed
+    expect(result.docsMap.unconfirmed).to.include('README.md');
+  });
+
   it('项目级文档缺失时 project 为 null', async () => {
     const result = await collect(path.join(TEST_BASE, '.requirements'));
     expect(result.project).to.equal(null);

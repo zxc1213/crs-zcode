@@ -136,7 +136,7 @@ class RequirementManager {
    * @returns {boolean}
    */
   isQueryCommand(parsed) {
-    const queryCommands = ['--list', '--active', '--status', '--dashboard'];
+    const queryCommands = ['--list', '--active', '--status', '--dashboard', '--history'];
     return queryCommands.some((cmd) => parsed.description.includes(cmd));
   }
 
@@ -180,6 +180,16 @@ class RequirementManager {
     if (description.includes('--status')) {
       const id = description.replace('--status', '').trim();
       return await this.handleStatusQuery(id);
+    }
+
+    if (description.includes('--history')) {
+      const limit = parseInt(description.replace('--history', '').trim(), 10);
+      await dashboard.showHistory(Number.isInteger(limit) && limit > 0 ? limit : 20);
+      return {
+        success: true,
+        action: 'show_history',
+        message: '已显示历史时间线',
+      };
     }
 
     return {
@@ -550,7 +560,9 @@ class RequirementManager {
         options.mode = 'manual';
       } else if (arg.startsWith('--status=')) {
         input = `--status ${arg.replace('--status=', '')}`;
-      } else if (arg === '--dashboard' || arg === '--list' || arg === '--active' || arg === '--status') {
+      } else if (arg.startsWith('--history=')) {
+        input = `--history ${arg.replace('--history=', '')}`;
+      } else if (arg === '--dashboard' || arg === '--list' || arg === '--active' || arg === '--status' || arg === '--history') {
         // 查询命令，添加到输入前面
         input = input ? `${input} ${arg}` : arg;
       } else if (!arg.startsWith('--')) {
@@ -571,7 +583,7 @@ class RequirementManager {
     const result = await manager.handle(input, options);
 
     // 对于查询命令，不需要格式化输出（Dashboard 已经输出）
-    if (result.action && ['show_dashboard', 'list_requirements', 'list_active'].includes(result.action)) {
+    if (result.action && ['show_dashboard', 'list_requirements', 'list_active', 'show_history'].includes(result.action)) {
       return;
     }
 

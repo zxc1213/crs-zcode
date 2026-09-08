@@ -10,25 +10,22 @@ const rootDir = join(__dirname, '..', '..');
 const skillsDir = join(rootDir, 'skills');
 
 /**
- * v0.13.0+ 标准：skills 目录采用平铺结构（无分类子目录）
- * skills/<skill-name>/SKILL.md（13 个 skills 全部平铺）
+ * v1.0.0 精简标准：skills 目录采用平铺结构（无分类子目录）
+ * skills/<skill-name>/SKILL.md（8 个核心 skills，命令入口精简为 5 个）
  */
-describe('Skills Structure (技能目录结构 v0.13.0+)', () => {
+describe('Skills Structure (技能目录结构 v1.0.0)', () => {
   const expectedSkills = [
     'req',
-    'req-manager',
     'req-brainstorm',
-    'req-init',
     'req-doc-format',
     'req-quality',
     'req-test-plan',
-    'req-verify',
     'req-priority',
     'req-metrics',
     'req-change',
-    'req-migrate',
-    'req-unify',
   ];
+
+  const removedSkills = ['req-manager', 'req-init', 'req-verify', 'req-migrate', 'req-unify'];
 
   it('skills/ 目录存在', () => {
     expect(existsSync(skillsDir), 'skills/ directory must exist').to.equal(true);
@@ -44,13 +41,29 @@ describe('Skills Structure (技能目录结构 v0.13.0+)', () => {
     ).to.have.lengthOf(0);
   });
 
-  it('包含全部 13 个 skill 子目录', () => {
+  it('包含全部 8 个核心 skill 子目录', () => {
     const entries = readdirSync(skillsDir).filter((e) =>
       statSync(join(skillsDir, e)).isDirectory()
     );
     expectedSkills.forEach((skill) => {
       expect(entries, `Missing skill directory: ${skill}`).to.include(skill);
     });
+  });
+
+  it('已精简的 skill 不再存在', () => {
+    const entries = readdirSync(skillsDir);
+    removedSkills.forEach((skill) => {
+      expect(entries, `Removed skill should not exist: ${skill}`).to.not.include(skill);
+    });
+  });
+
+  it('commands/ 精简为 5 个入口命令', () => {
+    const commandsDir = join(rootDir, 'commands');
+    const expected = ['req.md', 'req-quality.md', 'req-priority.md', 'req-change.md', 'metrics.md'];
+    expected.forEach((cmd) => {
+      expect(existsSync(join(commandsDir, cmd)), `Missing command: ${cmd}`).to.equal(true);
+    });
+    expect(readdirSync(commandsDir).filter((e) => e.endsWith('.md')).length).to.equal(expected.length);
   });
 
   it('每个 skill 目录都包含 SKILL.md 文件', () => {
@@ -101,7 +114,7 @@ describe('Commands Structure', () => {
   it('commands 是平铺结构（每个 .md 直接位于 commands/ 下）', () => {
     const entries = readdirSync(commandsDir);
     const mdFiles = entries.filter((e) => e.endsWith('.md'));
-    expect(mdFiles.length, 'Should have multiple command .md files').to.be.greaterThan(5);
+    expect(mdFiles.length, 'Should have the 5 entry commands').to.equal(5);
   });
 });
 

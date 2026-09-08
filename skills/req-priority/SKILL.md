@@ -230,10 +230,10 @@ priority-estimator --quick
 
 ## 集成到工作流
 
-### 与 req-manager 集成
+### 在需求创建流程中集成
 
 ```javascript
-// req-manager skill 中添加优先级评估
+// 需求创建流程中添加优先级评估
 async function createRequirement(description) {
   // 1. brainstorm-grill 分析
   const design = await brainstormGrill(description);
@@ -335,7 +335,7 @@ async function generatePlan(reqId) {
 **相关 skills**：
 
 - `brainstorm-grill`: 提供需求分析内容作为评估依据
-- `req-manager`: 创建需求时自动评估优先级
+- `req`: 创建需求时自动评估优先级
 - `writing-plans`: 根据优先级调整计划详细程度
 
 **输出**：

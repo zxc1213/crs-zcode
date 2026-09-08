@@ -340,13 +340,12 @@ onRequirementCompleted(req) {
 **数据来源**：
 
 - `meta.yaml`: 需求元数据（创建时间、状态等）
-- `req-quality`: 质量检查结果
-- `req-verify`: 验证检查结果
+- `req-quality`: 质量门禁与验收检查结果
 - `req-change`: 变更记录
 
 **相关命令**：
 
-- `/req`: 创建需求时自动收集数据
+- `/crs:req`: 创建需求时自动收集数据
 - `/priority`: 查看优先级排序
 - `/quality-gate`: 质量检查时记录数据
 

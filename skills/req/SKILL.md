@@ -282,11 +282,7 @@ req 如何实现OAuth认证？
 
 ## 集成说明
 
-**替代**：
-- 完全替代`commands/req.md`命令在Codex中的功能
-
 **与现有skills的关系**：
-- `req-manager`：智能路由和简化入口
 - `req-brainstorm`：阶段2深度分析
 - `req-priority`：阶段3优先级评估
 - `req-quality`：阶段3质量检查
@@ -314,7 +310,7 @@ req (本skill)
 - **命令式**（推荐）：`/crs:req --feature --deep 添加用户登录`
 - **自然语言**：直接描述需求并提及 CRS，如"使用 req 流程创建一个新功能需求：用户登录"
 
-两种方式最终都路由到 req-manager 统一入口执行。
+两种方式最终都由本 skill（req）统一路由执行。
 
 ## 配置选项
 

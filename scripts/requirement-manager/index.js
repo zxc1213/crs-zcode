@@ -10,10 +10,13 @@ import { Processor } from './core/processor.js';
 import { runCreationFlow } from './core/creation-flow.js';
 import { handleChange, handleEvent } from './core/change-events.js';
 import { STATUS_LABELS, STATUS_COLORS } from './core/schema.js';
+import { loadRules, validateRules, DEFAULT_RULES, RULES_REL_PATH } from './core/rules.js';
 import securityFilter from './features/security.js';
 import { error } from './utils/logger.js';
 import Dashboard from './ui/dashboard.js';
 import path from 'path';
+import fs from 'fs';
+import yaml from 'js-yaml';
 import chalk from 'chalk';
 
 /**
@@ -296,6 +299,12 @@ class RequirementManager {
     // 创建管理器实例
     const manager = new RequirementManager(baseDir);
 
+    // 子命令：rules（规则清单 / 校验，FEAT-20260909-001-4ae874）
+    if (args[0] === 'rules') {
+      await printRules(baseDir, args[1]);
+      return;
+    }
+
     // 子命令：change / event（req-change 流程与时间线事件的引擎入口）
     if (args[0] === 'change' || args[0] === 'event') {
       const params = {};
@@ -370,6 +379,58 @@ class RequirementManager {
     // 输出结果
     formatOutput(result);
   }
+}
+
+/**
+ * 打印合并后的规则清单（含来源标注）或校验 rules.yaml（rules 子命令）
+ */
+async function printRules(baseDir, flag) {
+  console.log(chalk.cyan('📋 CRS 规则清单\n'));
+
+  const rulesPath = path.join(baseDir, '.requirements', '_system', 'rules.yaml');
+  let project = null;
+  let parseError = null;
+  if (fs.existsSync(rulesPath)) {
+    try {
+      project = yaml.load(fs.readFileSync(rulesPath, 'utf-8'));
+    } catch (err) {
+      parseError = err.message;
+    }
+  }
+
+  if (flag === '--validate') {
+    const result = validateRules(parseError ? null : project);
+    if (parseError) {
+      console.log(chalk.red(`✗ ${RULES_REL_PATH} YAML 语法错误: ${parseError}`));
+      process.exitCode = 1;
+      return;
+    }
+    if (result.errors.length === 0 && result.warnings.length === 0) {
+      console.log(chalk.green(`✓ ${RULES_REL_PATH} 校验通过`));
+      return;
+    }
+    for (const message of result.errors) console.log(chalk.red(`  ✗ ${message}`));
+    for (const message of result.warnings) console.log(chalk.yellow(`  ⚠ ${message}`));
+    if (result.errors.length > 0) process.exitCode = 1;
+    return;
+  }
+
+  const merged = await loadRules(baseDir);
+  const defaultIds = new Set(DEFAULT_RULES.rules.map((r) => r.id));
+  const projectIds = new Set(parseError ? [] : validateRules(project).cleaned.rules.map((r) => r.id));
+
+  if (parseError) {
+    console.log(chalk.yellow(`⚠ ${RULES_REL_PATH} 语法错误，以下为内置默认（${parseError}）\n`));
+  }
+
+  console.log(`inject 预算: ${merged.inject_budget_chars} chars ｜ 规则数: ${merged.rules.length}\n`);
+  for (const rule of merged.rules) {
+    const source = defaultIds.has(rule.id) ? (projectIds.has(rule.id) ? '项目覆盖' : '内置') : '项目新增';
+    const status = rule.enabled === false ? chalk.gray('disabled') : chalk.green('enabled');
+    console.log(`  ${chalk.bold(rule.id)}  [${rule.type}] ${status} priority=${rule.priority ?? 0}  ${chalk.gray(source)}`);
+    console.log(`    ${(rule.message || '').slice(0, 60)}${(rule.message || '').length > 60 ? '…' : ''}`);
+  }
+  console.log(`\n校验: node scripts/requirement-manager/index.js rules --validate ｜ 自定义指南: docs/rules.md`);
 }
 
 /**

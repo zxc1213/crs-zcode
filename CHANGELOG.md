@@ -2,6 +2,36 @@
 
 本文件记录 CRS ZCode 插件每个版本的变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循语义化。
 
+## [1.5.0] - 2026-09-10
+
+**主题：规则体系与 token 收敛——hook 文案全部数据化、注入预算、注入面瘦身 50%。**
+
+### 新增
+
+- **规则引擎** `core/rules.js`：项目在 `.requirements/_system/rules.yaml` 声明两类规则——`guard`（PostToolUse 守卫条件+文案，新增 Bash `command_contains` 匹配能力）与 `inject`（SessionStart 简短提醒）。同 id 字段级覆盖内置规则、新 id 追加；单条非法剔除并告警，YAML 损坏整体降级默认；`inject_budget_chars` 注入预算（默认 600 字符，超限按 priority 整条丢弃），防止规则体系自身成为 token 通胀源
+- **hook 文案数据化**：session-start / post-tool-use / stop 三个 hook 的面向用户文案全部迁入规则数据（内置默认 = v1.4 行为逐字等价），无 rules.yaml 的项目零行为变化；hook 源码零内嵌文案有测试断言护航
+- **`rules` CLI 子命令**：列出合并后规则并标注来源（内置/项目覆盖/项目新增）；`rules --validate` 校验 rules.yaml（非法置退出码 1）
+- **`bin/crs-context-stats.js` 注入面度量**：commands/skills 逐文件字节、hook 注入文案字符数与预算占用；`--json` 输出基线、`--compare-json` 对比增减（路径参数零暴露，基线走 shell 重定向）
+- **体积回归断言**：commands+skills 总量 ≤ v1.4 基线（105,796B）的 75%、单命令 ≤5KB，进常规测试套件防回涨
+- `docs/rules.md` 规则自定义指南（含守卫/提醒/覆盖内置/占位符/预算说明）
+- guard 规则占位符：`{id}` / `{status}` / `{path}`（内置与项目规则通用）
+
+### 变更
+
+- **注入面收敛 50%（105.8KB → 52.9KB）**：`metrics` / `req-change` / `req-quality` 命令与 req-test-plan、req-metrics、req-quality、req-priority 四个 SKILL.md 的示例输出与 mock 数据外移 `docs/examples/`（按需 Read，不随命令加载）；`req-doc-format` 的子文件格式定义移交骨架模板（骨架即格式实例，消除双源）；`/crs:req` 命令与 skills/req 去重（命令=路由+硬性约束）
+- req-test-plan 中与 CRS 实际输出格式相矛盾的"10 节测试计划文档结构"移除（实际输出为 test-cases/ 三文件）
+- req-quality 中与 config.yaml 机制冲突的第三方配置 JSON 移除，统一 `quality.gate_threshold` 口径
+
+### 修复
+
+- **`--help`/`-h` 被当作需求描述误建垃圾需求**（CLI 参数解析把未知旗标拼进描述；现帮助旗标短路，零副作用，BUG-20260909-001-69b294）
+- **敏感信息检查系统性误报**：凭证正则把「关键词+自然语言」判为凭证（如"优化 token 消耗"直接阻断需求创建）；收紧为「关键词 + 显式 =/: 分隔符 + ≥6 位密钥样 ASCII 值」，负向后行断言放行 `db_password` 类 snake_case（BUG-20260909-001-69b32f）
+- **tests/hooks/zcode-hooks.test.js 整文件加载失败被静默跳过**（`dirname` 未导入），v1.4 起该文件 0 用例运行；修复后 7 用例恢复
+
+### 测试
+
+- 411 用例全绿（v1.4 基线 355 → +56）：规则引擎 14、hook 规则消费端到端 10、CLI rules 4、context-stats 5、缺陷回归 16、hook lib 修复恢复 7
+
 ## [1.4.0] - 2026-09-09
 
 **主题：正确性与收敛——一轮全库代码审查后的集中修复。**

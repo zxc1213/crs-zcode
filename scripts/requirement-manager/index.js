@@ -284,6 +284,12 @@ class RequirementManager {
    * @param {string[]} args - 命令行参数
    */
   static async cli(args) {
+    // 帮助旗标短路：打印用法即返回，零副作用（防止被当作需求描述误建需求，BUG-20260909-001-69b294）
+    if (args.includes('-h') || args.includes('--help')) {
+      printUsage();
+      return;
+    }
+
     // 获取基础目录
     const baseDir = process.cwd();
 
@@ -364,6 +370,25 @@ class RequirementManager {
     // 输出结果
     formatOutput(result);
   }
+}
+
+/**
+ * 打印 CLI 用法（--help / -h 时输出，零副作用）
+ */
+function printUsage() {
+  console.log(chalk.cyan('📋 CRS 需求管理系统\n'));
+  console.log('用法: node scripts/requirement-manager/index.js [选项] <需求描述>');
+  console.log('      node scripts/requirement-manager/index.js <子命令> [参数]\n');
+  console.log('子命令:');
+  console.log('  change    需求变更入账（--id <ID> --level <small|medium|large> --reason <原因>）');
+  console.log('  event     时间线事件（--id <ID> --type <类型> --title <标题> --summary <摘要>）\n');
+  console.log('常用选项:');
+  console.log('  -f, --feature   功能类（默认）      -b, --bug        缺陷类');
+  console.log('  -q, --question  问题类              -a, --adjust     调整类');
+  console.log('  -r, --refactor  重构类');
+  console.log('  --list / --active / --dashboard   查询需求清单 / 活跃需求 / 看板');
+  console.log('  --status <ID> / --history <ID>    查询单个需求状态 / 历史\n');
+  console.log('  -h, --help     打印本说明');
 }
 
 /**

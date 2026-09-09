@@ -8,8 +8,11 @@ class SecurityFilter {
     // 敏感信息模式定义
     this.patterns = {
       // 凭证类：password, token, key, secret, api_key
+      // 仅匹配「关键词 + 显式 =/: 分隔符 + ≥6 位密钥样 ASCII 值」；
+      // 负向后行断言放行 snake_case 前缀（db_password）并排除 mid-word 误配（turkey）；
+      // 自然叙述（"token 消耗"、"license key: 购买后发放"）不命中，见 BUG-20260909-001-69b32f
       credentials: {
-        regex: /(?:password|passwd|pwd|token|key|secret|api[_-]?key|authorization|auth)[:\s]*[=:]?\s*[^\s'"{>]+/gi,
+        regex: /(?<![A-Za-z])(?:api[_-]?key|password|passwd|pwd|token|secret|key|authorization|auth)\s*[=:]\s*[A-Za-z0-9_\-+/=.]{6,}/gi,
         label: 'credentials',
         replacement: '[REDACTED_CREDENTIAL]',
       },

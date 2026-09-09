@@ -52,7 +52,20 @@ export async function appendEvent(baseDir, event) {
   if (event.details) entry.details = String(event.details).slice(0, 1000);
 
   data.events.push(entry);
-  await fs.writeFile(filePath, yaml.dump({ events: data.events }, { indent: 2, lineWidth: -1, noRefs: true }), 'utf-8');
+  // 原子写：先写临时文件再 rename，避免 CLI 与 Stop hook 并发时写坏唯一事实源
+  const tmpPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
+  await fs.writeFile(tmpPath, yaml.dump({ events: data.events }, { indent: 2, lineWidth: -1, noRefs: true }), 'utf-8');
+  try {
+    await fs.rename(tmpPath, filePath);
+  } catch (error) {
+    // rename 失败时清理临时文件，保留旧账本内容
+    try {
+      await fs.rm(tmpPath, { force: true });
+    } catch (_cleanupError) {
+      // 静默
+    }
+    throw error;
+  }
 
   return entry;
 }

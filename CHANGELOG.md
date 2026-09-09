@@ -2,6 +2,27 @@
 
 本文件记录 CRS ZCode 插件每个版本的变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循语义化。
 
+## [1.3.0] - 2026-09-09
+
+**主题：引擎重构——让维护者 10 分钟看懂核心链路。**
+
+### 新增
+
+- **项目级配置** `.requirements/_system/config.yaml`（`core/config.js` 加载，缺失/损坏自动回退默认）：覆盖优先级权重（`priority.weights`）、质量门禁阈值（`quality.gate_threshold`）、需求骨架清单（`skeleton`）、docs-map 扫描深度（`docs_map.max_depth`）；`req-priority`/`req-quality` skill 文档注明配置覆盖口径
+- 自定义骨架条目支持项目模板目录（`.requirements/_system/templates/`），无模板时写入最小骨架
+- 新增测试：配置加载/合并/降级/缓存（8 例）、骨架自定义与路径穿越拒绝、时间线埋点归位验证（7 例），合计 345 用例全绿
+
+### 变更
+
+- `core/processor.js`（578 行）拆分：`template-renderer`（模板加载与渲染）/ `requirement-creator`（创建落盘与副作用）/ `status-machine`（状态流转与埋点）三模块；processor 保留门面（解析/路径/查询/删除/索引）
+- `core/scheduler.js`（554 行）瘦身至 298 行：删除"生成提示词再由 LLM 执行"的旧模式（5 套硬编码提示词模板、executeSkill、健康检查、降级机制），调度器只管执行模式与阶段顺序；skill 由宿主 skills 体系直接编排
+- `core/router.js` 移除 fallback 死配置；`index.js` 门面瘦身（671 → 444 行）：创建流下沉 `core/creation-flow.js`，变更/事件下沉 `core/change-events.js`
+- 骨架渲染路径安全强化：条目白名单 + 根目录边界双校验（清单可能来自项目配置）
+
+### 移除
+
+- `skill-adapters/`（6 文件）与 `core/skill-interface.js`（合计约 1100 行）：生产代码零引用的死代码，仅自持测试引用
+
 ## [1.2.0] - 2026-09-09
 
 **主题：文档体系与变更历史——项目文档不再散乱。**

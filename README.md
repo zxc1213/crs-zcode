@@ -45,6 +45,25 @@ CRS（ClaudeReqSys）的 **ZCode 插件版**，为 ZCode 提供从需求捕获�
 - **统一事件账本**：`project/timeline.yaml` 记录全部历史（创建/流转/变更/修复/复盘/经验），`/crs:req --history` 或 HTML 报告查看完整时间线
 - **双层纳管**：`project/docs-map.yaml` 登记宿主项目自己的 README/docs/ 文档，漂移检测提醒过期；`crs-project-sync --scan-docs` 自动登记
 
+## 项目级配置（v1.3）
+
+创建 `.requirements/_system/config.yaml` 可覆盖默认行为（缺失或损坏时回退默认，不影响使用）：
+
+```yaml
+priority:
+  weights: { business_value: 40, urgency: 30, dependencies: 15, effort: 10, risk: 5 }  # 优先级评估权重
+quality:
+  gate_threshold: 80        # 质量门禁阈值（%）
+skeleton:                    # 需求骨架清单（条目优先用 _system/templates/ 下的项目模板）
+  root: [spec.md, plan.md, test-cases.md]
+  subdirs:
+    spec: [background.md, user-stories.md, design.md, api.md, decisions.md]
+    plan: [tasks.md, milestones.md]
+    test-cases: [positive.md, negative.md, boundary.md]
+docs_map:
+  max_depth: 3              # 宿主 docs/ 目录扫描深度
+```
+
 ## 命令（5 个）
 
 | 命令 | 用途 |
@@ -70,7 +89,7 @@ CRS（ClaudeReqSys）的 **ZCode 插件版**，为 ZCode 提供从需求捕获�
 - **[📖 图形化帮助手册](docs/manual.html)** — 单文件 HTML，浏览器直接打开：导航/搜索/深色模式，新手推荐从这里开始
 - [用户指南](docs/USER_GUIDE.md) — 5 阶段流程详解、需求类型、数据目录、常见场景、复盘沉淀
 - [架构说明](docs/ARCHITECTURE.md) — 模块分层、数据流、成长机制、与原版（crs-plugin）的差异
-- [演进路线图](docs/ROADMAP.md) — v1.1 引导与成长 → v1.2 文档体系与变更历史 → v1.3 引擎重构
+- [演进路线图](docs/ROADMAP.md) — v1.1 引导与成长 → v1.2 文档体系与变更历史 → v1.3 引擎重构 → v1.4 生态与反馈
 
 ## 开发
 

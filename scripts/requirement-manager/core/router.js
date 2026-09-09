@@ -1,90 +1,37 @@
 /**
- * 类型路由器 - 管理不同需求类型的路由配置
+ * 类型路由器 - 管理不同需求类型的路由配置（skill 链与阶段顺序）
  */
-
-/**
- * 降级模式枚举
- */
-const FALLBACK_MODES = {
-  TEMPLATE: 'template',
-  MANUAL: 'manual',
-  SIMULATION: 'simulation',
-  ERROR: 'error',
-};
 
 /**
  * 路由配置
- * 每种需求类型都有对应的 primarySkill、optionalSkills、phases 和 fallback 配置
+ * 每种需求类型都有对应的 primarySkill、optionalSkills 和 phases
+ * skill 本身由宿主（ZCode skills 体系）直接编排，这里只声明顺序
  */
 const ROUTES = {
   feature: {
     primarySkill: 'brainstorming',
     optionalSkills: ['writing-plans'],
     phases: ['analysis', 'planning', 'implementation', 'testing'],
-    fallback: {
-      enabled: true,
-      defaultMode: 'template',
-      allowOverride: true,
-      skills: {
-        brainstorming: 'template',
-        'writing-plans': 'template',
-      },
-    },
   },
   bug: {
     primarySkill: 'systematic-debugging',
     optionalSkills: ['writing-plans'],
     phases: ['investigation', 'diagnosis', 'fix', 'verification'],
-    fallback: {
-      enabled: true,
-      defaultMode: 'template',
-      allowOverride: true,
-      skills: {
-        'systematic-debugging': 'template',
-        'writing-plans': 'template',
-      },
-    },
   },
   question: {
     primarySkill: 'research',
     optionalSkills: [],
     phases: ['research', 'analysis', 'answer'],
-    fallback: {
-      enabled: true,
-      defaultMode: 'template',
-      allowOverride: true,
-      skills: {
-        research: 'template',
-      },
-    },
   },
   adjustment: {
     primarySkill: 'brainstorming',
     optionalSkills: ['writing-plans'],
     phases: ['review', 'analysis', 'planning', 'implementation'],
-    fallback: {
-      enabled: true,
-      defaultMode: 'template',
-      allowOverride: true,
-      skills: {
-        brainstorming: 'template',
-        'writing-plans': 'template',
-      },
-    },
   },
   refactor: {
     primarySkill: 'code-explorer',
     optionalSkills: ['writing-plans'],
     phases: ['exploration', 'planning', 'refactoring', 'testing'],
-    fallback: {
-      enabled: true,
-      defaultMode: 'template',
-      allowOverride: true,
-      skills: {
-        'code-explorer': 'template',
-        'writing-plans': 'template',
-      },
-    },
   },
 };
 
@@ -226,127 +173,6 @@ class TypeRouter {
     }
     return [...route.optionalSkills];
   }
-
-  /**
-   * 获取指定类型的降级配置
-   * @param {string} type - 需求类型
-   * @returns {object|null} 降级配置对象
-   */
-  getFallbackConfig(type) {
-    const route = this.getRoute(type);
-    if (!route || !route.fallback) {
-      return null;
-    }
-    return { ...route.fallback };
-  }
-
-  /**
-   * 获取指定技能的降级模式
-   * @param {string} type - 需求类型
-   * @param {string} skillName - 技能名称
-   * @returns {string|null} 降级模式
-   */
-  getSkillFallbackMode(type, skillName) {
-    const fallback = this.getFallbackConfig(type);
-    if (!fallback || !fallback.enabled) {
-      return null;
-    }
-
-    // 首先检查技能特定的降级模式
-    if (fallback.skills && fallback.skills[skillName]) {
-      return fallback.skills[skillName];
-    }
-
-    // 返回默认降级模式
-    return fallback.defaultMode || null;
-  }
-
-  /**
-   * 检查降级是否启用
-   * @param {string} type - 需求类型
-   * @returns {boolean} 是否启用降级
-   */
-  isFallbackEnabled(type) {
-    const fallback = this.getFallbackConfig(type);
-    return fallback ? fallback.enabled : false;
-  }
-
-  /**
-   * 检查是否允许覆盖降级模式
-   * @param {string} type - 需求类型
-   * @returns {boolean} 是否允许覆盖
-   */
-  isFallbackOverrideAllowed(type) {
-    const fallback = this.getFallbackConfig(type);
-    return fallback ? fallback.allowOverride : false;
-  }
-
-  /**
-   * 设置指定类型的降级模式
-   * @param {string} type - 需求类型
-   * @param {string} mode - 降级模式
-   * @returns {boolean} 是否设置成功
-   */
-  setFallbackMode(type, mode) {
-    const validModes = Object.values(FALLBACK_MODES);
-    if (!validModes.includes(mode)) {
-      return false;
-    }
-
-    const route = this.routes.get(type);
-    if (!route || !route.fallback) {
-      return false;
-    }
-
-    route.fallback.defaultMode = mode;
-    return true;
-  }
-
-  /**
-   * 为特定技能设置降级模式
-   * @param {string} type - 需求类型
-   * @param {string} skillName - 技能名称
-   * @param {string} mode - 降级模式
-   * @returns {boolean} 是否设置成功
-   */
-  setSkillFallbackMode(type, skillName, mode) {
-    const validModes = Object.values(FALLBACK_MODES);
-    if (!validModes.includes(mode)) {
-      return false;
-    }
-
-    const route = this.routes.get(type);
-    if (!route || !route.fallback || !route.fallback.skills) {
-      return false;
-    }
-
-    route.fallback.skills[skillName] = mode;
-    return true;
-  }
-
-  /**
-   * 启用或禁用降级
-   * @param {string} type - 需求类型
-   * @param {boolean} enabled - 是否启用
-   * @returns {boolean} 是否设置成功
-   */
-  setFallbackEnabled(type, enabled) {
-    const route = this.routes.get(type);
-    if (!route || !route.fallback) {
-      return false;
-    }
-
-    route.fallback.enabled = enabled;
-    return true;
-  }
-
-  /**
-   * 获取所有有效的降级模式
-   * @returns {string[]} 降级模式数组
-   */
-  getValidFallbackModes() {
-    return Object.values(FALLBACK_MODES);
-  }
 }
 
 // 创建单例实例
@@ -428,34 +254,6 @@ export function getOptionalSkills(type) {
   return routerInstance.getOptionalSkills(type);
 }
 
-/**
- * 获取降级配置
- * @param {string} type - 需求类型
- * @returns {object|null}
- */
-export function getFallbackConfig(type) {
-  return routerInstance.getFallbackConfig(type);
-}
-
-/**
- * 获取技能的降级模式
- * @param {string} type - 需求类型
- * @param {string} skillName - 技能名称
- * @returns {string|null}
- */
-export function getSkillFallbackMode(type, skillName) {
-  return routerInstance.getSkillFallbackMode(type, skillName);
-}
-
-/**
- * 检查降级是否启用
- * @param {string} type - 需求类型
- * @returns {boolean}
- */
-export function isFallbackEnabled(type) {
-  return routerInstance.isFallbackEnabled(type);
-}
-
 // 导出类和默认实例
-export { TypeRouter, FALLBACK_MODES };
+export { TypeRouter, ROUTES };
 export default routerInstance;

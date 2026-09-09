@@ -34,9 +34,15 @@
 | 模块 | 职责 |
 |---|---|
 | `requirement-manager/core/schema.js` | **唯一口径源**：状态词表/日期字段/类型目录/事件类型枚举，读取侧兼容旧口径 |
-| `requirement-manager/core/processor.js` | 需求创建/状态机/骨架文件生成/模板渲染 |
-| `requirement-manager/core/scheduler.js` | 执行计划与 skill 调用链生成 |
-| `requirement-manager/core/router.js` | 意图识别与路由 |
+| `requirement-manager/core/config.js` | **项目级配置**：`.requirements/_system/config.yaml` 加载（深合并/校验/缓存，损坏回退默认） |
+| `requirement-manager/core/processor.js` | 需求门面：输入解析/路径解析/查询/删除/索引（创建与状态流转委托下游） |
+| `requirement-manager/core/requirement-creator.js` | 需求创建：目录/meta/raw/agent-context/骨架 + 时间线与知识图谱副作用 |
+| `requirement-manager/core/status-machine.js` | 状态流转唯一入口：词表归一/completed 补写/timeline 埋点/plan-sync/done 触发聚合 |
+| `requirement-manager/core/template-renderer.js` | 模板加载与 `${KEY}` 占位符渲染 |
+| `requirement-manager/core/scheduler.js` | 执行模式与阶段顺序（skill 由宿主 skills 体系直接编排，本层不生成/执行提示词） |
+| `requirement-manager/core/router.js` | 类型路由：各类型 primarySkill/可选 skills/阶段列表 |
+| `requirement-manager/core/creation-flow.js` | handle() 创建分支编排：创建 → 执行计划 → 日志 → 结果格式化 |
+| `requirement-manager/core/change-events.js` | `change`/`event` 子命令落点：校验/项目文档重同步/时间线入账 |
 | `requirement-manager/features/` | 安全过滤（敏感信息）、相似度检测 |
 | `requirement-manager/project-sync/index.js` | 项目文档聚合编排（done/bug/变更同步，区块替换语义） |
 | `requirement-manager/project-sync/timeline.js` | **统一事件账本** `project/timeline.yaml`（append-only，读取容错） |
@@ -47,7 +53,7 @@
 | `metrics/` | 度量收集与导出 |
 | `sync-version.js` | package.json → 插件清单版本同步 |
 
-已移除的死代码（v1.1）：`optimization/`（自我优化实验，~1300 行零引用）、`conversation-logger/`（与 ZCode 记忆类插件重叠）、`demo.js`。
+已移除的死代码：v1.1 移除 `optimization/`（自我优化实验，~1300 行零引用）、`conversation-logger/`（与 ZCode 记忆类插件重叠）、`demo.js`；v1.3 移除 `skill-adapters/`（6 文件）与 `core/skill-interface.js`（"生成提示词再由 LLM 执行"的 Claude 时代遗产，约 1100 行零生产引用）。
 
 依赖（运行时）：`chalk`、`cli-table3`、`fuse.js`、`js-yaml`。引擎不依赖任何平台 API，Node >= 18 可跑。
 
@@ -126,9 +132,9 @@
 
 ## 测试
 
-- `tests/core/` processor 状态机与骨架生成
+- `tests/core/` 配置加载/骨架清单与穿越拒绝/时间线埋点、processor 状态机
 - `tests/hooks/zcode-hooks.test.js` 活跃需求扫描/边界/兼容
 - `tests/manifests/` 清单格式、版本同步、skills 结构（8 个）、legacy 引用清零
 - `tests/project-sync/`、`tests/export/`、`tests/utils/` 引擎各模块
 
-运行：`npm test`（350+ 用例）。
+运行：`npm test`（345 用例）。

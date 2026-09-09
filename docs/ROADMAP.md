@@ -15,7 +15,7 @@
 
 **验收**：新项目从 `/plugin install` 到第一个需求 done 全程无需查文档。
 
-## v1.2 文档体系与变更历史（当前）
+## v1.2 文档体系与变更历史
 
 **主题**：项目文档不再散乱——体系化生成、变更即同步、历史可总览。
 
@@ -28,15 +28,15 @@
 
 **验收**：任一需求变更后，项目文档当日同步；`--history` 能回答"这个项目经历过什么"。
 
-## v1.3 引擎重构
+## v1.3 引擎重构（当前）
 
 **主题**：让维护者 10 分钟看懂核心链路。
 
-- [ ] `processor.js`（600+ 行）拆分为 `template-renderer` / `requirement-creator` / `status-machine` 三模块，职责单一
-- [ ] `scheduler.js` + `skill-adapters/` 简化：移除 Claude 时代 adapter 遗产（brainstorming/debugging/research/code-explorer 五个 adapter 的调用方式是"生成提示词再由 LLM 执行"，改为 skills 直接编排，调度器只管阶段顺序）
-- [ ] 项目级配置：`.requirements/_system/config.yaml` 覆盖默认行为（优先级权重、门禁阈值、骨架清单、docs-map 扫描深度）
-- [ ] `index.js` 门面瘦身：只保留 handle() 与查询，其余下沉
-- [ ] 测试与重构同步移动，保持 330+ 全绿
+- [x] `processor.js`（600+ 行）拆分为 `template-renderer` / `requirement-creator` / `status-machine` 三模块，职责单一
+- [x] `scheduler.js` + `skill-adapters/` 简化：移除 Claude 时代 adapter 遗产（brainstorming/debugging/research/code-explorer 五个 adapter 的调用方式是"生成提示词再由 LLM 执行"，改为 skills 直接编排，调度器只管阶段顺序）
+- [x] 项目级配置：`.requirements/_system/config.yaml` 覆盖默认行为（优先级权重、门禁阈值、骨架清单、docs-map 扫描深度）
+- [x] `index.js` 门面瘦身：只保留 handle() 与查询，其余下沉
+- [x] 测试与重构同步移动，保持 330+ 全绿
 
 **验收**：核心链路（create → 5 阶段 → done）任一环节，新维护者 10 分钟内定位到代码。
 

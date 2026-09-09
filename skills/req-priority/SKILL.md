@@ -7,6 +7,10 @@ description: 需求优先级科学评估 - 基于业务价值、紧急程度、�
 
 对需求进行科学的多维度评估，帮助团队合理排定优先级，优化资源分配，最大化业务价值。
 
+## 项目配置覆盖
+
+若项目存在 `.requirements/_system/config.yaml` 且配置了 `priority.weights`，以配置值为准（键：`business_value` / `urgency` / `dependencies` / `effort` / `risk`）；未配置时使用下文默认权重（40 / 30 / 15 / 10 / 5）。
+
 ## 评估维度
 
 ### 1. 业务价值 (Business Value) - 权重 40%

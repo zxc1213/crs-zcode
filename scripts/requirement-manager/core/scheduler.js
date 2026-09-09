@@ -1,56 +1,11 @@
 /**
- * Skill 调度器 - 生成执行计划和 skill 调用提示词
+ * 阶段调度器 - 只管执行模式与阶段顺序
+ *
+ * 职责：把 router 的类型路由（skill 链 + 阶段列表）展开为带检查点的执行计划。
+ * skill 本身由宿主（ZCode skills 体系）直接编排，本模块不再生成或执行提示词。
  */
 
 import { getRoute, getSkillChain, getPhases } from './router.js';
-import { SkillInterface } from './skill-interface.js';
-import { AdapterFactory } from '../skill-adapters/index.js';
-
-/**
- * 提示词模板配置
- */
-const PROMPT_TEMPLATES = {
-  brainstorming: (context) => `请使用 brainstorming skill 分析以下需求：
-
-需求：${context.description}
-类型：${context.type}
-需求ID：${context.id || 'N/A'}
-
-请按照 brainstorming 流程进行需求分析和设计。`,
-
-  'systematic-debugging': (context) => `请使用 systematic-debugging skill 调查以下问题：
-
-问题：${context.description}
-需求ID：${context.id || 'N/A'}
-相关错误信息：${context.errorDetails || '无'}
-
-请按照 systematic-debugging 流程进行问题诊断。`,
-
-  'writing-plans': (context) => `请使用 writing-plans skill 为以下需求创建实施计划：
-
-需求ID：${context.id}
-需求类型：${context.type}
-需求描述：${context.description}
-${context.analysisResult ? `需求分析结果：\n${context.analysisResult}` : '需求分析已完成，请创建详细的实施计划。'}
-
-请创建详细的实施计划，包括步骤分解、依赖关系和验收标准。`,
-
-  research: (context) => `请研究以下技术问题：
-
-问题：${context.description}
-需求ID：${context.id || 'N/A'}
-${context.researchScope ? `研究范围：${context.researchScope}` : ''}
-
-请提供详细的分析和建议，包括相关技术选项和最佳实践。`,
-
-  'code-explorer': (context) => `请使用 code-explorer skill 探索以下代码：
-
-目标：${context.description}
-需求ID：${context.id || 'N/A'}
-${context.targetPath ? `目标路径：${context.targetPath}` : ''}
-
-请分析代码结构、依赖关系和可能的改进点。`,
-};
 
 /**
  * 执行模式配置
@@ -74,50 +29,26 @@ const EXECUTION_MODES = {
 };
 
 /**
+ * skill → 动作词表（用于步骤描述）
+ */
+const SKILL_ACTIONS = {
+  brainstorming: '分析',
+  'systematic-debugging': '调查',
+  'writing-plans': '规划',
+  research: '研究',
+  'code-explorer': '探索',
+};
+
+/**
  * Scheduler 类
  */
 class Scheduler {
   /**
    * 构造函数
-   * @param {string} baseDir - 基础目录路径
+   * @param {string} baseDir - 基础目录路径（保留以兼容既有调用约定）
    */
   constructor(baseDir) {
     this.baseDir = baseDir;
-    this.promptTemplates = new Map();
-    this.executionModes = new Map();
-    this.setupTemplates();
-    this.setupModes();
-    this.initializeSkillInterface();
-  }
-
-  /**
-   * 初始化技能接口和适配器
-   */
-  initializeSkillInterface() {
-    this.skillInterface = new SkillInterface(this.baseDir, {
-      enableFallback: true,
-      fallbackMode: 'template',
-      cacheStatus: true,
-    });
-    this.adapters = AdapterFactory.createAllAdapters(this.baseDir);
-  }
-
-  /**
-   * 初始化提示词模板
-   */
-  setupTemplates() {
-    for (const [skill, template] of Object.entries(PROMPT_TEMPLATES)) {
-      this.promptTemplates.set(skill, template);
-    }
-  }
-
-  /**
-   * 初始化执行模式
-   */
-  setupModes() {
-    for (const [mode, config] of Object.entries(EXECUTION_MODES)) {
-      this.executionModes.set(mode, { ...config });
-    }
   }
 
   /**
@@ -139,7 +70,7 @@ class Scheduler {
     }
 
     // 验证执行模式
-    const modeConfig = this.executionModes.get(mode);
+    const modeConfig = EXECUTION_MODES[mode];
     if (!modeConfig) {
       throw new Error(`不支持的执行模式: ${mode}`);
     }
@@ -202,7 +133,6 @@ class Scheduler {
         step: stepIndex++,
         phase,
         skill,
-        action: this.getSkillAction(skill),
         required,
         description: this.getStepDescription(skill, phase, description),
       });
@@ -234,22 +164,6 @@ class Scheduler {
   }
 
   /**
-   * 获取 skill 的操作类型
-   * @param {string} skill - skill 名称
-   * @returns {string} 操作类型
-   */
-  getSkillAction(skill) {
-    const actionMap = {
-      brainstorming: 'analyze',
-      'systematic-debugging': 'investigate',
-      'writing-plans': 'plan',
-      research: 'research',
-      'code-explorer': 'explore',
-    };
-    return actionMap[skill] || 'execute';
-  }
-
-  /**
    * 获取步骤描述
    * @param {string} skill - skill 名称
    * @param {string} phase - 阶段名称
@@ -257,41 +171,17 @@ class Scheduler {
    * @returns {string} 步骤描述
    */
   getStepDescription(skill, phase, description) {
-    const action = this.getSkillAction(skill);
-    const skillActionMap = {
-      analyze: '分析',
-      investigate: '调查',
-      plan: '规划',
-      research: '研究',
-      explore: '探索',
-    };
-    const actionText = skillActionMap[action] || '执行';
-
+    const actionText = SKILL_ACTIONS[skill] || '执行';
     return `${actionText}${phase === 'analysis' ? '' : ' ' + phase}阶段：${description}`;
   }
 
   /**
-   * 生成 skill 调用提示词
+   * 生成 skill 调用提示词（通用一句话模板；skill 由宿主编排，这里只给上下文）
    * @param {string} skill - skill 名称
    * @param {object} context - 上下文对象
    * @returns {string} 提示词
    */
   generateSkillPrompt(skill, context) {
-    const template = this.promptTemplates.get(skill);
-    if (!template) {
-      // 如果没有特定模板，返回通用提示词
-      return this.generateGenericPrompt(skill, context);
-    }
-    return template(context);
-  }
-
-  /**
-   * 生成通用提示词
-   * @param {string} skill - skill 名称
-   * @param {object} context - 上下文对象
-   * @returns {string} 提示词
-   */
-  generateGenericPrompt(skill, context) {
     const { description, type, id } = context;
     return `请使用 ${skill} skill 处理以下需求：
 
@@ -303,105 +193,21 @@ class Scheduler {
   }
 
   /**
-   * 通过适配器执行技能
-   * @param {string} skillName - 技能名称
-   * @param {object} params - 参数对象
-   * @returns {Promise<object>} 执行结果
-   */
-  async executeSkill(skillName, params = {}) {
-    try {
-      // 获取对应的适配器
-      const adapter = this.adapters.get(skillName);
-
-      if (!adapter) {
-        // 如果没有适配器，使用 SkillInterface
-        return await this.skillInterface.callSkill(skillName, params);
-      }
-
-      // 使用适配器执行
-      const result = await adapter.execute(params);
-
-      return {
-        success: true,
-        skill: skillName,
-        result,
-        adapter: true,
-      };
-    } catch (error) {
-      // 降级到 SkillInterface
-      return await this.skillInterface.callSkill(skillName, params, {}, error);
-    }
-  }
-
-  /**
-   * 获取技能健康摘要
-   * @returns {Promise<object>} 健康摘要
-   */
-  async getHealthSummary() {
-    const health = await this.skillInterface.getAllSkillsHealth();
-
-    const summary = {
-      total: health.size,
-      available: 0,
-      missing: 0,
-      details: {},
-    };
-
-    for (const [name, status] of health.entries()) {
-      summary.details[name] = {
-        available: status.available,
-        version: status.version,
-        error: status.error,
-      };
-
-      if (status.available) {
-        summary.available++;
-      } else {
-        summary.missing++;
-      }
-    }
-
-    return summary;
-  }
-
-  /**
-   * 检查技能链健康状态
-   * @param {string[]} skillChain - 技能链
-   * @returns {Promise<object>} 健康检查结果
-   */
-  async checkSkillsHealth(skillChain) {
-    const results = {
-      allAvailable: true,
-      skills: {},
-      summary: {
-        total: skillChain.length,
-        available: 0,
-        missing: 0,
-      },
-    };
-
-    for (const skillName of skillChain) {
-      const health = await this.skillInterface.checkSkillHealth(skillName);
-
-      results.skills[skillName] = health;
-
-      if (health.available) {
-        results.summary.available++;
-      } else {
-        results.summary.missing++;
-        results.allAvailable = false;
-      }
-    }
-
-    return results;
-  }
-
-  /**
    * 获取支持的 skill 列表
    * @returns {string[]} skill 名称数组
    */
   getSupportedSkills() {
-    return Array.from(this.promptTemplates.keys());
+    const skills = new Set();
+    for (const type of ['feature', 'bug', 'question', 'adjustment', 'refactor']) {
+      const route = getRoute(type);
+      if (route) {
+        skills.add(route.primarySkill);
+        for (const optional of route.optionalSkills || []) {
+          skills.add(optional);
+        }
+      }
+    }
+    return Array.from(skills);
   }
 
   /**
@@ -409,19 +215,7 @@ class Scheduler {
    * @returns {string[]} 执行模式数组
    */
   getSupportedModes() {
-    return Array.from(this.executionModes.keys());
-  }
-
-  /**
-   * 添加自定义提示词模板
-   * @param {string} skill - skill 名称
-   * @param {function} template - 模板函数
-   */
-  addPromptTemplate(skill, template) {
-    if (typeof template !== 'function') {
-      throw new Error('模板必须是一个函数');
-    }
-    this.promptTemplates.set(skill, template);
+    return Object.keys(EXECUTION_MODES);
   }
 
   /**
@@ -430,31 +224,8 @@ class Scheduler {
    * @returns {object|null} 模式配置
    */
   getModeConfig(mode) {
-    const config = this.executionModes.get(mode);
+    const config = EXECUTION_MODES[mode];
     return config ? { ...config } : null;
-  }
-
-  /**
-   * 设置降级模式
-   * @param {string} mode - 降级模式 (template/manual/simulation/error)
-   */
-  setFallbackMode(mode) {
-    this.skillInterface.setFallbackMode(mode);
-  }
-
-  /**
-   * 启用/禁用降级
-   * @param {boolean} enabled - 是否启用
-   */
-  setFallbackEnabled(enabled) {
-    this.skillInterface.setFallbackEnabled(enabled);
-  }
-
-  /**
-   * 清除技能状态缓存
-   */
-  clearSkillCache() {
-    this.skillInterface.clearCache();
   }
 }
 
@@ -472,10 +243,6 @@ function getScheduler(baseDir) {
   }
   return schedulerInstance;
 }
-
-/**
- * 导出便捷函数
- */
 
 /**
  * 生成执行计划
@@ -501,23 +268,11 @@ export function generateSkillPrompt(skill, context, baseDir) {
 }
 
 /**
- * 执行技能
- * @param {string} skillName - 技能名称
- * @param {object} params - 参数对象
- * @param {string} baseDir - 基础目录路径
- * @returns {Promise<object>} 执行结果
- */
-export async function executeSkill(skillName, params, baseDir) {
-  const scheduler = getScheduler(baseDir);
-  return await scheduler.executeSkill(skillName, params);
-}
-
-/**
  * 获取支持的 skill 列表
  * @returns {string[]}
  */
 export function getSupportedSkills() {
-  return Object.keys(PROMPT_TEMPLATES);
+  return getScheduler().getSupportedSkills();
 }
 
 /**
@@ -526,17 +281,6 @@ export function getSupportedSkills() {
  */
 export function getSupportedModes() {
   return Object.keys(EXECUTION_MODES);
-}
-
-/**
- * 添加自定义提示词模板
- * @param {string} skill - skill 名称
- * @param {function} template - 模板函数
- * @param {string} baseDir - 基础目录路径
- */
-export function addPromptTemplate(skill, template, baseDir) {
-  const scheduler = getScheduler(baseDir);
-  scheduler.addPromptTemplate(skill, template);
 }
 
 /**
@@ -550,5 +294,5 @@ export function getModeConfig(mode) {
 }
 
 // 导出类和默认实例工厂
-export { Scheduler, getScheduler };
+export { Scheduler, getScheduler, EXECUTION_MODES };
 export default getScheduler;

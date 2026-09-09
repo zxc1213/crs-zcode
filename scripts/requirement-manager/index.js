@@ -1,21 +1,17 @@
 /**
- * RequirementManager - 智能需求管理系统主入口
+ * RequirementManager - 智能需求管理系统门面
  *
- * 功能：
- * - 接收用户输入
- * - 安全检查
- * - 解析需求
- * - 创建需求
- * - 生成执行计划
- * - 返回下一步操作
+ * 只保留：handle() 入口（安全检查 → 解析 → 查询路由/创建委托）与 CLI。
+ * 创建流 → core/creation-flow.js；变更/事件 → core/change-events.js；
+ * 引擎动作 → core/processor.js（门面）及其下游模块。
  */
 
 import { Processor } from './core/processor.js';
-import { schedule, generateSkillPrompt } from './core/scheduler.js';
+import { runCreationFlow } from './core/creation-flow.js';
+import { handleChange, handleEvent } from './core/change-events.js';
 import securityFilter from './features/security.js';
-import { info, success, error } from './utils/logger.js';
+import { error } from './utils/logger.js';
 import Dashboard from './ui/dashboard.js';
-import { CHANGE_LEVELS, EVENT_TYPES } from './core/schema.js';
 import path from 'path';
 import chalk from 'chalk';
 
@@ -55,17 +51,8 @@ class RequirementManager {
         return await this.handleQueryCommand(parsed);
       }
 
-      // 4. 创建需求
-      const requirement = await this.createRequirement(parsed);
-
-      // 5. 生成执行计划
-      const executionPlan = this.generateExecutionPlan(requirement);
-
-      // 6. 记录日志
-      await this.logCreation(requirement, executionPlan);
-
-      // 7. 返回结果
-      return this.formatResult(requirement, executionPlan);
+      // 4. 创建流（创建 + 执行计划 + 日志 + 格式化）
+      return await runCreationFlow(this.processor, parsed, this.logPath);
     } catch (err) {
       await error('SYSTEM', `处理失败: ${err.message}`, this.logPath);
       return this.formatError(err);
@@ -260,235 +247,21 @@ class RequirementManager {
   }
 
   /**
-   * 处理需求变更（req-change 流程的引擎落点）
-   * CLI: node .../index.js change --id FEAT-... --level medium --reason "..."
-   * 记录时间线事件 + changelog，并重同步已聚合的项目文档区块
+   * 需求变更（req-change 流程的引擎落点，逻辑在 core/change-events.js）
    * @param {object} params - { id, level, reason }
    * @returns {Promise<object>} 处理结果
    */
   async handleChange(params = {}) {
-    const { id, level = 'medium', reason = '' } = params;
-
-    if (!id || !/^[A-Z]+(-[A-Za-z0-9]+)+$/.test(id)) {
-      return {
-        success: false,
-        error: 'invalid_requirement_id',
-        message: `无效的需求 ID: ${id || '(空)'}，示例: FEAT-20260908-001`,
-      };
-    }
-    if (!CHANGE_LEVELS.includes(level)) {
-      return {
-        success: false,
-        error: 'invalid_change_level',
-        message: `无效的变更级别: ${level} (允许: ${CHANGE_LEVELS.join(', ')})`,
-      };
-    }
-
-    let meta;
-    try {
-      meta = await this.processor.get(id);
-    } catch (err) {
-      return {
-        success: false,
-        error: 'requirement_not_found',
-        message: `未找到需求 ${id}：${err.message}`,
-      };
-    }
-
-    if (process.env.CRS_PROJECT_SYNC === 'off') {
-      return {
-        success: true,
-        action: 'requirement_changed',
-        requirementId: id,
-        level,
-        message: 'CRS_PROJECT_SYNC=off，仅记录变更说明（未写项目文档）',
-      };
-    }
-
-    const { syncOnRequirementChange } = await import('./project-sync/index.js');
-    const syncResult = await syncOnRequirementChange(this.baseDir, id, { level, reason });
-
-    const ok = syncResult.success !== false && !(syncResult.errors && syncResult.errors.length);
-    return {
-      success: ok,
-      action: 'requirement_changed',
-      requirementId: id,
-      level,
-      reason,
-      title: meta.title,
-      updatedDocs: syncResult.updated || [],
-      skipped: syncResult.skipped || [],
-      errors: syncResult.errors || [],
-      message: ok
-        ? `变更已记录（${level}）${(syncResult.updated || []).length ? `，已更新: ${(syncResult.updated || []).join(', ')}` : ''}`
-        : `变更记录失败: ${(syncResult.errors || []).join('; ')}`,
-    };
+    return handleChange(this.processor, params);
   }
 
   /**
-   * 记录时间线事件（LLM 通过 CLI 触发 retro_completed / lesson_saved 等洞察类事件）
-   * CLI: node .../index.js event --type retro_completed --id FEAT-... --title "..." --summary "..."
+   * 记录时间线事件（逻辑在 core/change-events.js）
    * @param {object} params - { type, id, title, summary }
    * @returns {Promise<object>} 处理结果
    */
   async handleEvent(params = {}) {
-    const { type, id, title, summary } = params;
-
-    if (!EVENT_TYPES.includes(type)) {
-      return {
-        success: false,
-        error: 'invalid_event_type',
-        message: `无效的事件类型: ${type} (允许: ${EVENT_TYPES.join(', ')})`,
-      };
-    }
-
-    if (id && !/^[A-Z]+(-[A-Za-z0-9]+)+$/.test(id)) {
-      return {
-        success: false,
-        error: 'invalid_requirement_id',
-        message: `无效的需求 ID: ${id}`,
-      };
-    }
-
-    const { appendEvent } = await import('./project-sync/timeline.js');
-    try {
-      const entry = await appendEvent(this.baseDir, { type, reqId: id, title, summary });
-      return {
-        success: true,
-        action: 'timeline_event',
-        event: entry,
-        message: `事件已记录: ${type}${id ? ` (${id})` : ''}`,
-      };
-    } catch (err) {
-      return {
-        success: false,
-        error: 'timeline_write_failed',
-        message: `事件写入失败: ${err.message}`,
-      };
-    }
-  }
-
-  /**
-   * 创建需求
-   * @param {object} parsed - 解析后的需求对象
-   * @returns {Promise<object>} 创建的需求对象
-   */  async createRequirement(parsed) {
-    const { type, mode, description } = parsed;
-
-    // 创建需求
-    const result = await this.processor.create(parsed);
-
-    // 返回完整的需求对象
-    return {
-      id: result.id,
-      path: result.path,
-      type,
-      mode,
-      description,
-    };
-  }
-
-  /**
-   * 生成执行计划
-   * @param {object} requirement - 需求对象
-   * @returns {object} 执行计划
-   */
-  generateExecutionPlan(requirement) {
-    try {
-      return schedule(requirement);
-    } catch (err) {
-      // 如果生成计划失败，返回基础计划
-      return {
-        requirementId: requirement.id,
-        type: requirement.type,
-        mode: requirement.mode,
-        modeDescription: '半自动执行',
-        steps: [],
-        checkpoints: [],
-        metadata: {
-          primarySkill: 'brainstorming',
-          optionalSkills: [],
-          totalSteps: 0,
-          totalCheckpoints: 0,
-        },
-        error: err.message,
-      };
-    }
-  }
-
-  /**
-   * 记录创建日志
-   * @param {object} requirement - 需求对象
-   * @param {object} executionPlan - 执行计划
-   */
-  async logCreation(requirement, executionPlan) {
-    await success(requirement.id, `需求已创建: ${requirement.type} - ${requirement.description.substring(0, 50)}`, this.logPath);
-
-    const totalSteps = executionPlan.metadata?.totalSteps || 0;
-    await info(requirement.id, `执行模式: ${executionPlan.modeDescription}, 步骤数: ${totalSteps}`, this.logPath);
-  }
-
-  /**
-   * 格式化结果
-   * @param {object} requirement - 需求对象
-   * @param {object} executionPlan - 执行计划
-   * @returns {object} 格式化的结果
-   */
-  formatResult(requirement, executionPlan) {
-    // 获取第一个步骤（通常是 brainstorming）
-    const firstStep = executionPlan.steps && executionPlan.steps.length > 0 ? executionPlan.steps[0] : null;
-
-    return {
-      success: true,
-      requirement: {
-        id: requirement.id,
-        type: requirement.type,
-        mode: requirement.mode,
-        description: requirement.description,
-      },
-      executionPlan: {
-        mode: executionPlan.mode,
-        modeDescription: executionPlan.modeDescription,
-        totalSteps: executionPlan.metadata?.totalSteps || 0,
-        checkpoints: executionPlan.checkpoints?.length || 0,
-      },
-      nextSteps: this.generateNextSteps(requirement, executionPlan, firstStep),
-    };
-  }
-
-  /**
-   * 生成下一步操作
-   * @param {object} requirement - 需求对象
-   * @param {object} executionPlan - 执行计划
-   * @param {object} firstStep - 第一步
-   * @returns {object} 下一步操作
-   */
-  generateNextSteps(requirement, executionPlan, firstStep) {
-    const steps = [];
-
-    // 第一步：调用 skill
-    if (firstStep) {
-      steps.push({
-        action: 'call_skill',
-        skill: firstStep.skill,
-        description: `使用 ${firstStep.skill} skill 分析需求`,
-        prompt: generateSkillPrompt(firstStep.skill, {
-          id: requirement.id,
-          type: requirement.type,
-          description: requirement.description,
-        }),
-      });
-    }
-
-    // 后续步骤提示
-    if (executionPlan.steps.length > 1) {
-      steps.push({
-        action: 'continue_workflow',
-        description: `完成后继续执行剩余 ${executionPlan.steps.length - 1} 个步骤`,
-      });
-    }
-
-    return steps;
+    return handleEvent(this.baseDir, params);
   }
 
   /**

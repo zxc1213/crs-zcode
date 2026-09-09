@@ -16,6 +16,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import yaml from 'js-yaml';
+import { loadConfig } from '../core/config.js';
 
 /** 允许的角色 */
 export const DOC_ROLES = ['readme', 'architecture', 'api', 'user-guide', 'changelog', 'requirements', 'other'];
@@ -99,11 +100,14 @@ function guessRole(fileName) {
 /**
  * 扫描宿主项目的外部文档（README、docs 目录下的 Markdown、根级 Markdown）
  * @param {string} baseDir
- * @param {object} options - { maxDepth: docs/ 下最大深度, 默认 3 }
+ * @param {object} options - { maxDepth: docs/ 下最大深度，默认取项目 config.yaml 的 docs_map.max_depth（缺省 3） }
  * @returns {Promise<Array<{path, title, role, sync_on}>>} 登记建议（未登记的）
  */
 export async function scanExternalDocs(baseDir, options = {}) {
-  const maxDepth = options.maxDepth ?? 3;
+  let maxDepth = options.maxDepth;
+  if (maxDepth === undefined || maxDepth === null) {
+    maxDepth = (await loadConfig(baseDir)).docs_map.max_depth;
+  }
   const root = path.resolve(baseDir);
   const candidates = [];
 

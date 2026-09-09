@@ -231,6 +231,21 @@ describe('rules 引擎（FEAT-20260909-001-4ae874）', () => {
     expect(applyPlaceholders('缺失变量 {missing} 保留', {})).to.equal('缺失变量 {missing} 保留');
   });
 
+  it('TC-NEG-06: rules.yaml 是目录（不可读）时降级默认并告警一次', async () => {
+    await fs.mkdir(path.join(baseDir, '.requirements', '_system', 'rules.yaml'), { recursive: true });
+    const rules = await loadRules(baseDir);
+    expect(rules.rules.map((r) => r.id)).to.deep.equal(['phase-guard']);
+    expect(warnCalls.filter((w) => w.includes('rules.yaml'))).to.have.lengthOf(1);
+  });
+
+  it('CRLF 行尾的 rules.yaml 正常解析（Windows 常态）', async () => {
+    await writeRules(baseDir, 'rules:\r\n  - id: zh\r\n    type: inject\r\n    message: 提交信息使用中文\r\n');
+    const rules = await loadRules(baseDir);
+    const zh = rules.rules.find((r) => r.id === 'zh');
+    expect(zh).to.exist;
+    expect(zh.message).to.equal('提交信息使用中文');
+  });
+
   it('templates 支持项目覆盖单条', async () => {
     await writeRules(baseDir, 'templates:\n  stop_summary: "自定义总结 {n}"');
     const t = (await loadRules(baseDir)).templates;

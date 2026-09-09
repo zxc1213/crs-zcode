@@ -5,351 +5,44 @@ description: 需求管理命令系统 - 5阶段工作流强制执行，从需求
 
 # 需求管理命令系统
 
-完整的5阶段工作流需求管理系统，确保每个需求都经过完整的分析和规划过程。
+5 阶段工作流的需求管理：**先文档后代码**，每阶段落盘可追溯。命令入口 `/crs:req`（本 skill 是其方法论说明）。
 
 ## 核心原则
 
-**⛔ 阶段守卫**：代码修改只能在阶段5（实施计划）完成后进行。在此之前，只能编辑`.requirements/`目录内的文档文件。
+**⛔ 阶段守卫**：代码修改只能在 5 阶段文档全部完成后进行。活跃需求处于 `planning/analyzed` 时编辑 `.requirements/` 外的文件，PostToolUse hook 注入违规警告（守卫文案与条件数据化，见 `.requirements/_system/rules.yaml`，指南 `docs/rules.md`）。
 
-当PostToolUse hook检测到活跃需求状态为`planning`或`analyzed`时编辑了外部文件，会输出警告。
+## 5 个阶段
 
-## 工作流阶段
+| 阶段 | 做什么 | 产出 |
+| --- | --- | --- |
+| 1 解析+初始化 | 安全检查 → 相似需求检测（`bin/kg-cli.js search "<描述>"`）→ lessons 检索 → 引擎 CLI 创建骨架 | `.requirements/<type>/<ID>/` 全套骨架 |
+| 2 深度分析 | req-brainstorm（探索→审查→展示→终审） | `spec/` 5 文件 + spec.md 索引 |
+| 3 优先级+质量 | req-priority 五维评估 + req-quality Gate 1 | spec.md 元数据 + meta.yaml `priority_detail` |
+| 4 测试策略 | req-test-plan 生成正/反/边界用例 | `test-cases/` 3 文件 + 索引 |
+| 5 实施计划 | writing-plans 任务分解与里程碑 | `plan/` + 索引 |
 
-```mermaid
-graph TD
-    A[用户输入] --> B[前置检查]
-    B --> C{.requirements/ 存在?}
-    C -->|否| D[自动初始化]
-    C -->|是| E[继续]
-    D --> E
-    E --> F[阶段1: 解析+初始化+生成骨架文件]
-    F --> G[阶段2: 深度分析 → Write spec.md]
-    G --> H[阶段3: 优先级+质量 → Update spec.md + meta.yaml]
-    H --> I[阶段4: 测试策略 → Write test-cases.md]
-    I --> J[阶段5: 实施计划 → Write plan.md]
-    J --> K[允许代码修改]
-```
+完成标准：三个索引文件（spec.md / test-cases.md / plan.md）所有行状态「已填充」。之后说"开始实现"进入编码。
 
-## 命令结构
+## CLI 旗标（引擎 `scripts/requirement-manager/index.js`）
 
-### 基本语法
+- 类型：`-f/--feature`（默认）、`-b/--bug`、`-q/--question`、`-a/--adjust`、`-r/--refactor`；ID 前缀 FEAT/BUG/QUES/ADJU/REF（唯一口径 `core/schema.js`）
+- 模式：`--quick`（跳过阶段 2，meta.mode=quick）、`--deep`（默认）、`--auto`、`--conservative`——旗标会被引擎剥离，不污染描述
+- 查询：`--list` / `--active` / `--dashboard` / `--status <ID>` / `--history <N>`；子命令：`change` / `event` / `rules`
 
-```
-req [--type TYPE] [--mode MODE] [--exec EXEC] [QUERY_OPTIONS] [描述]
-```
+类型推断（未显式给旗标时）：登录/注册/添加… → feature；错误/崩溃/修复… → bug；如何/为什么… → question；重构/优化… → refactor。推断结果须向用户一句话确认。
 
-### 类型选项
+## 质量与安全内建
 
-| 选项 | 需求类型 | 前缀 | 说明 |
-|------|----------|------|------|
-| `--feature` 或 `--feat` | 新功能 | FEAT | 添加新功能或特性 |
-| `--bug` | Bug修复 | BUG | 修复缺陷或错误 |
-| `--question` 或 `--ques` | 问题 | QUES | 提出技术问题 |
-| `--adjustment` 或 `--adj` | 调整 | ADJU | 对现有功能进行调整 |
-| `--refactor` 或 `--ref` | 重构 | REF | 代码重构优化 |
+- **安全检查**：创建前扫描描述中的凭证/PII（形如 `password=xxx` 的真实凭证会阻断；自然技术叙述不误报）
+- **相似度检测**：知识图谱查相似需求，高相似时让用户选择继续或复用
+- **每阶段立即 Write 落盘**——只输出不落盘是最严重违规
 
-### 分析模式
-
-| 选项 | 模式 | 说明 | 适用场景 |
-|------|------|------|----------|
-| `--quick` | 快速模式 | 跳过深度分析，直接生成基础文档 | 简单任务、紧急修复 |
-| `--deep` | 深度模式 | 完整的5阶段工作流，包含AI分析 | 复杂功能、重要需求 |
-| `--auto` | 自动模式 | 无需确认，自动完成所有阶段 | 自动化场景 |
-| `--semi-auto` 或默认 | 半自动模式 | 关键节点需要用户确认 | 日常开发（推荐） |
-
-### 执行选项
-
-| 选项 | 说明 |
-|------|------|
-| `--exec` | 自动执行生成的实施计划 |
-| `--no-exec` | 只生成计划，不自动执行 |
-
-### 查询选项
-
-| 选项 | 说明 | 输出 |
-|------|------|------|
-| `--list` | 列出所有需求 | 表格形式 |
-| `--active` | 显示活跃需求 | 当前正在处理的需求 |
-| `--status` | 显示需求状态统计 | 按状态分组 |
-| `--dashboard` | 显示完整仪表板 | 多维度统计 |
-
-## 智能推断
-
-当未明确指定类型时，系统会自动推断：
+## 协作链
 
 ```
-包含"登录"、"注册"、"用户" → feature
-包含"bug"、"错误"、"崩溃"、"失败" → bug
-包含"如何"、"怎么"、"为什么" → question
-包含"重构"、"优化"、"改进" → refactor
+/crs:req（路由）
+  → [2] req-brainstorm → [3] req-priority + req-quality
+  → [4] req-test-plan → [5] writing-plans → 开始实现 → 复盘沉淀 lessons
 ```
 
-## 执行流程
-
-### 阶段1：解析和初始化
-
-**调用脚本**：`node "$ZCODE_PLUGIN_ROOT/scripts/requirement-manager/index.js"`
-
-**操作**：
-1. 解析用户输入，确定需求类型和模式
-2. 生成需求ID（格式：`{前缀}-{YYYYMMDD}-{序号}`）
-3. 创建目录结构：`.requirements/{type}/{REQ-ID}/`
-4. 生成骨架文件：
-   - `raw.md` - 原始需求记录
-   - `meta.yaml` - 需求元数据
-   - `spec.md` - 需求规格说明（初始版本）
-   - `test-cases.md` - 测试用例（初始版本）
-   - `plan.md` - 实施计划（初始版本）
-
-### 阶段2：深度分析
-
-**调用skill**：`req-brainstorm`
-
-**操作**：
-1. 深度分析需求背景、目标、约束条件
-2. 识别关键假设和风险
-3. 生成完整的`spec.md`，包含：
-   - 背景和动机
-   - 用户故事
-   - 技术方案设计
-   - API设计（如适用）
-   - 技术决策记录
-
-### 阶段3：优先级和质量评估
-
-**调用skills**：`req-priority` + `req-quality`
-
-**操作**：
-1. **优先级评估**：
-   - 业务价值分析
-   - 技术复杂度评估
-   - 依赖关系识别
-   - 生成`priority.md`
-2. **质量检查**：
-   - INVEST原则检查
-   - SMART目标验证
-   - 完整性评估
-   - 更新`meta.yaml`中的质量评分
-
-### 阶段4：测试策略
-
-**调用skill**：`req-test-plan`
-
-**操作**：
-1. 设计测试策略
-2. 生成完整测试用例：
-   - 正向测试用例（`test-cases/positive.md`）
-   - 负向测试用例（`test-cases/negative.md`）
-   - 边界条件测试（`test-cases/boundary.md`）
-3. 更新`test-cases.md`
-
-### 阶段5：实施计划
-
-**调用skill**：`writing-plans`
-
-**操作**：
-1. 分解任务为可执行步骤
-2. 定义里程碑和交付物
-3. 估算工作量
-4. 生成完整的`plan.md`，包含：
-   - 任务列表（`plan/tasks.md`）
-   - 里程碑（`plan/milestones.md`）
-   - 风险和缓解措施
-
-## 相似度检测
-
-在每个阶段完成后，系统会：
-
-1. 调用知识图谱搜索相似需求
-2. 显示3个最相似的历史需求
-3. 标记潜在重复或冲突
-4. 提供复用建议
-
-**调用脚本**：`bin/kg-search "需求描述" 3`
-
-## 前置检查
-
-执行前自动检查：
-
-1. **项目初始化检查**
-   - 验证`.requirements/`目录存在
-   - 如不存在，自动运行初始化
-
-2. **活跃需求检查**
-   - 检查是否有活跃需求分支
-   - 提示用户是否需要切换或完成当前需求
-
-3. **依赖检查**
-   - 验证Node.js版本
-   - 检查必要的依赖是否安装
-
-## 安全检查
-
-1. **敏感数据检查**
-   - 扫描需求描述中的敏感信息
-   - 警告用户潜在的安全风险
-
-2. **可行性检查**
-   - 评估技术可行性
-   - 识别潜在的技术障碍
-
-## 使用示例
-
-### 场景1：创建新功能（深度模式）
-
-```
-req --feature --deep 添加用户头像上传功能
-```
-
-**执行流程**：
-1. 解析为feature类型，深度模式
-2. 生成ID：`FEAT-20260526-001-a3b2c1`
-3. 完整5阶段工作流
-4. 每个阶段需要用户确认
-
-### 场景2：快速Bug修复
-
-```
-req --bug --quick 修复登录按钮样式问题
-```
-
-**执行流程**：
-1. 解析为bug类型，快速模式
-2. 跳过深度分析
-3. 生成基础文档
-4. 立即可开始修复
-
-### 场景3：自动执行实施计划
-
-```
-req --feature --exec 实现用户消息推送
-```
-
-**执行流程**：
-1. 完成5阶段工作流
-2. 自动执行生成的plan.md
-3. 持续跟踪进度
-
-### 场景4：查询需求状态
-
-```
-req --dashboard
-```
-
-**输出**：完整的需求统计仪表板
-
-### 场景5：智能推断
-
-```
-req 如何实现OAuth认证？
-```
-
-**自动推断**：
-- 类型：question（包含"如何"）
-- 模式：semi-auto（默认）
-- ID：`QUES-20260526-001`
-
-## 错误处理
-
-### 常见错误
-
-**错误1：未指定需求描述**
-
-```
-错误：必须提供需求描述或查询选项
-用法：req [选项] <描述>
-示例：req --feature 添加用户登录
-```
-
-**错误2：阶段守卫触发**
-
-```
-警告：检测到在规划阶段编辑了外部文件
-当前需求状态：planning
-允许编辑：.requirements/ 目录内的文档文件
-请先完成5阶段工作流，再进行代码修改
-```
-
-**错误3：相似需求检测**
-
-```
-警告：发现相似需求
-- FEAT-20260520-003-b4d5e6 (相似度: 85%)
-- FEAT-20260515-001-c7f8a9 (相似度: 72%)
-
-是否继续创建新需求？(y/n)
-```
-
-## 集成说明
-
-**与现有skills的关系**：
-- `req-brainstorm`：阶段2深度分析
-- `req-priority`：阶段3优先级评估
-- `req-quality`：阶段3质量检查
-- `req-test-plan`：阶段4测试策略
-- `writing-plans`：阶段5实施计划
-
-**调用顺序**：
-
-```
-req (本skill)
-  ↓
-[阶段2] → req-brainstorm
-  ↓
-[阶段3] → req-priority + req-quality
-  ↓
-[阶段4] → req-test-plan
-  ↓
-[阶段5] → writing-plans
-```
-
-## 调用方式
-
-本 skill 支持两种调用方式：
-
-- **命令式**（推荐）：`/crs:req --feature --deep 添加用户登录`
-- **自然语言**：直接描述需求并提及 CRS，如"使用 req 流程创建一个新功能需求：用户登录"
-
-两种方式最终都由本 skill（req）统一路由执行。
-
-## 配置选项
-
-可以通过 ZCode 插件设置（userConfig）或项目约定配置默认行为：
-
-```json
-{
-  "req": {
-    "defaultType": "feature",
-    "defaultMode": "semi_auto",
-    "autoConfirm": false,
-    "maxSimilarity": 80,
-    "requireQualityGate": true
-  }
-}
-```
-
-## 最佳实践
-
-1. **明确需求描述**
-   - 好："添加用户头像上传功能，支持裁剪和压缩"
-   - 差："上传功能"
-
-2. **选择合适的模式**
-   - 简单任务：`--quick`
-   - 重要功能：`--deep`
-   - 日常使用：默认（semi-auto）
-
-3. **遵守阶段守卫**
-   - 不要跳过文档阶段
-   - 完成规划后再编码
-   - 保持文档和代码同步
-
-4. **利用相似度检测**
-   - 查看历史需求
-   - 复用已有方案
-   - 避免重复工作
-
-5. **定期查询状态**
-   - 使用`--dashboard`查看整体进度
-   - 使用`--active`跟踪当前需求
-   - 使用`--status`了解项目健康度
+文档格式规范见 `req-doc-format`；变更走 `req-change`；度量见 `req-metrics`。项目级定制：`_system/config.yaml`（引擎参数）与 `_system/rules.yaml`（行为规则）。

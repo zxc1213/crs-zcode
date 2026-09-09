@@ -61,4 +61,22 @@ describe('cli --help 短路（BUG-20260909-001-69b294）', function () {
     const reqTypes = (await fs.readdir(path.join(tmp, '.requirements'))).filter((t) => t !== 'project');
     expect(reqTypes).to.have.lengthOf(1);
   });
+
+  it('--quick 剥离出描述并写入 meta.mode（旗标顺序无关）', async () => {
+    const { stdout } = await runCli(['--bug', '--quick', '修复登录样式'], tmp);
+    expect(stdout).to.include('描述: 修复登录样式');
+    expect(stdout).to.not.include('--quick');
+    const bugDir = path.join(tmp, '.requirements', 'bugs');
+    const reqs = await fs.readdir(bugDir);
+    const meta = await fs.readFile(path.join(bugDir, reqs[0], 'meta.yaml'), 'utf-8');
+    expect(meta).to.include('mode: quick');
+  });
+
+  it('--deep 显式深度模式（meta.mode=semi）', async () => {
+    await runCli(['--deep', '添加登录功能'], tmp);
+    const featDir = path.join(tmp, '.requirements', 'features');
+    const reqs = await fs.readdir(featDir);
+    const meta = await fs.readFile(path.join(featDir, reqs[0], 'meta.yaml'), 'utf-8');
+    expect(meta).to.include('mode: semi');
+  });
 });

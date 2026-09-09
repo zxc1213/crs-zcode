@@ -274,8 +274,11 @@ export async function loadRules(baseDir) {
   let raw;
   try {
     raw = await fs.readFile(rulesPath, 'utf-8');
-  } catch (_error) {
-    // 文件不存在 → 纯默认（大多数项目的常态，零警告）
+  } catch (error) {
+    // ENOENT = 项目没有规则文件（常态），纯默认零警告；其他读错误（EACCES/EISDIR 等）告警降级
+    if (error.code !== 'ENOENT') {
+      console.warn(`[crs] 规则文件不可读（${RULES_REL_PATH}: ${error.code ?? error.message}），已回退内置默认`);
+    }
     const defaults = JSON.parse(JSON.stringify(DEFAULT_RULES));
     cache.set(baseDir, defaults);
     return defaults;

@@ -82,6 +82,21 @@ export class Processor {
       }
     }
 
+    // 模式旗标（可出现在类型旗标前后，不污染描述）：--quick / --deep
+    let modeFlagMatched = true;
+    while (modeFlagMatched) {
+      modeFlagMatched = false;
+      if (cleanedInput.startsWith('--quick')) {
+        mode = 'quick';
+        cleanedInput = cleanedInput.replace(/^--quick\s*/, '').trim();
+        modeFlagMatched = true;
+      } else if (cleanedInput.startsWith('--deep')) {
+        mode = 'semi_auto';
+        cleanedInput = cleanedInput.replace(/^--deep\s*/, '').trim();
+        modeFlagMatched = true;
+      }
+    }
+
     // 剩余部分作为描述
     description = cleanedInput;
 

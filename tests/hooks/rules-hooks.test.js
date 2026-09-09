@@ -210,6 +210,51 @@ describe('hooks 消费规则数据（FEAT-20260909-001-4ae874）', function () {
     expect(parseContext((await runHook('session-start.mjs', { hook_event_name: 'SessionStart', cwd: tmp })).out)).to.equal(base);
   });
 
+  it('TC-BND-04: inject 同 priority 按声明顺序稳定输出', async () => {
+    await makeProject(tmp, {
+      status: 'implementing',
+      rulesYaml: [
+        'rules:',
+        '  - id: a1',
+        '    type: inject',
+        '    priority: 5',
+        '    message: AAA',
+        '  - id: b2',
+        '    type: inject',
+        '    priority: 5',
+        '    message: BBB',
+      ].join('\n'),
+    });
+    const { out } = await runHook('session-start.mjs', { hook_event_name: 'SessionStart', cwd: tmp });
+    expect(parseContext(out)).to.include('AAA BBB');
+  });
+
+  it('guard 多条命中按 priority 降序拼接，总量受 600 字符上限', async () => {
+    const guardLine = (id, priority, tag) =>
+      [
+        `  - id: ${id}`,
+        '    type: guard',
+        `    priority: ${priority}`,
+        '    when: { tools: [Edit], statuses: [planning], outside: .requirements }',
+        `    message: ${tag}${'m'.repeat(132 - tag.length)}`, // phase-guard(204) + 两条 132 → 468；第三条 603>600 被截断
+      ].join('\n');
+    await makeProject(tmp, {
+      status: 'planning',
+      rulesYaml: ['rules:', guardLine('g-low', 10, 'LOWW'), guardLine('g-high', 30, 'HIGH'), guardLine('g-mid', 20, 'MIDD')].join('\n'),
+    });
+    const { out } = await runHook('post-tool-use.mjs', {
+      hook_event_name: 'PostToolUse',
+      tool_name: 'Edit',
+      tool_input: { file_path: path.join(tmp, 'src', 'x.js') },
+      cwd: tmp,
+    });
+    const context = parseContext(out);
+    expect(context).to.include('HIGH');
+    expect(context).to.include('MIDD');
+    expect(context).to.not.include('LOWW'); // 第三条放不进 600 字符预算被截断
+    expect(context.indexOf('HIGH')).to.be.lessThan(context.indexOf('MIDD'));
+  });
+
   it('Stop 汇总来自模板（含操作数与需求 ID）', async () => {
     await makeProject(tmp, { status: 'implementing', logLines: 3 });
     const { out } = await runHook('stop.mjs', { hook_event_name: 'Stop', cwd: tmp });

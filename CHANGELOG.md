@@ -25,12 +25,16 @@
 ### 修复
 
 - **`--help`/`-h` 被当作需求描述误建垃圾需求**（CLI 参数解析把未知旗标拼进描述；现帮助旗标短路，零副作用，BUG-20260909-001-69b294）
+- **`--quick`/`--deep` 直调引擎时污染需求描述**（同 --help 一族；现被解析为模式旗标剥离，`--quick` 写入 meta.mode，旗标顺序无关）
 - **敏感信息检查系统性误报**：凭证正则把「关键词+自然语言」判为凭证（如"优化 token 消耗"直接阻断需求创建）；收紧为「关键词 + 显式 =/: 分隔符 + ≥6 位密钥样 ASCII 值」，负向后行断言放行 `db_password` 类 snake_case（BUG-20260909-001-69b32f）
 - **tests/hooks/zcode-hooks.test.js 整文件加载失败被静默跳过**（`dirname` 未导入），v1.4 起该文件 0 用例运行；修复后 7 用例恢复
+- **文档与引擎口径漂移**：ID 前缀 adjustment 实为 `ADJU`（文档误写 ADJ）且遗漏 `tech-debt→DEBT`，以 core/schema.js 为唯一口径；skills/req 与 skills/req-change 重写移除过期引用（不存在的 `kg-search` 脚本、`priority.md` 文件、userConfig 配置）
+- **loadRules 对"不可读"静默降级**：EACCES/EISDIR 等读错误现在告警（ENOENT 缺文件仍静默，属常态）
 
 ### 测试
 
-- 411 用例全绿（v1.4 基线 355 → +56）：规则引擎 14、hook 规则消费端到端 10、CLI rules 4、context-stats 5、缺陷回归 16、hook lib 修复恢复 7
+- 418 用例全绿（v1.4 基线 355 → +63）：规则引擎 16、hook 规则消费端到端 12、CLI rules 4、CLI 旗标/帮助 7、context-stats 5（含体积回归断言）、缺陷回归 16、hook lib 修复恢复 7、端到端生命周期冒烟 1
+- 注入面体积最终收敛 **-60%（105.8KB → 41.8KB）**，全部断言进常规测试套件
 
 ## [1.4.0] - 2026-09-09
 

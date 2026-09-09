@@ -19,8 +19,8 @@ description: CRS 文档格式规范 - 目录结构、命名规则、索引文件
 
 - 根文件（spec.md / plan.md / test-cases.md）是**摘要索引**：元数据 + 子文件链接表 + 状态列
 - 阶段 2-5 的详细内容**始终写入子目录**，不写根文件；子文件名 kebab-case
-- type → 目录：feature→features、bug→bugs、question→questions、adjustment→adjustments、refactor→refactors
-- ID：`{前缀}-{YYYYMMDD}-{序号}-{hash后缀}`，前缀 FEAT/BUG/QUES/ADJ/REF（与 type 对应）；序号与唯一性由引擎管理，**不要手工编 ID**
+- type → 目录：feature→features、bug→bugs、question→questions、adjustment→adjustments、refactor→refactors、tech-debt→tech-debt
+- ID：`{前缀}-{YYYYMMDD}-{序号}-{hash后缀}`，前缀 FEAT/BUG/QUES/ADJU/REF/DEBT（与 type 对应，以 core/schema.js TYPE_PREFIXES 为唯一口径）；序号与唯一性由引擎管理，**不要手工编 ID**
 
 ## 2. meta.yaml
 

@@ -64,6 +64,30 @@ docs_map:
   max_depth: 3              # 宿主 docs/ 目录扫描深度
 ```
 
+## 规则自定义（v1.5）
+
+团队约定不用改插件代码——在 `.requirements/_system/rules.yaml` 声明即可（详见 [docs/rules.md](docs/rules.md)）：
+
+```yaml
+rules:
+  - id: no-force-push        # guard：PostToolUse 守卫（条件命中即注入提示）
+    type: guard
+    when: { tools: [Bash], command_contains: "git push --force" }
+    message: "禁止 force push，先确认"
+  - id: zh-commit            # inject：SessionStart 注入的简短提醒
+    type: inject
+    message: "提交信息使用中文"
+```
+
+同 id 可覆盖内置规则（如 5 阶段守卫文案）、`enabled: false` 可关闭；inject 注入有预算上限（默认 600 字符），防止规则本身膨胀上下文。配套工具：
+
+```bash
+node "$ZCODE_PLUGIN_ROOT/scripts/requirement-manager/index.js" rules             # 规则清单（含来源）
+node "$ZCODE_PLUGIN_ROOT/bin/crs-context-stats.js"                               # 注入面体积统计
+```
+
+v1.5 同时将插件自身注入面收敛了 50%（105.8KB → 52.7KB）：命令/技能的示例输出外移 `docs/examples/` 按需加载，格式定义以骨架模板为唯一定义源。
+
 ## 命令（5 个）
 
 | 命令 | 用途 |

@@ -111,6 +111,7 @@ class RequirementManager {
       full_auto: 'fully',
       semi_auto: 'semi',
       manual: 'manual',
+      quick: 'quick',
     };
 
     // 合并选项
@@ -447,6 +448,8 @@ function printUsage() {
   console.log('  -f, --feature   功能类（默认）      -b, --bug        缺陷类');
   console.log('  -q, --question  问题类              -a, --adjust     调整类');
   console.log('  -r, --refactor  重构类');
+  console.log('  --quick / --deep / --auto / --conservative   执行模式');
+  console.log('  rules [--validate]                规则清单 / rules.yaml 校验');
   console.log('  --list / --active / --dashboard   查询需求清单 / 活跃需求 / 看板');
   console.log('  --status <ID> / --history <ID>    查询单个需求状态 / 历史\n');
   console.log('  -h, --help     打印本说明');

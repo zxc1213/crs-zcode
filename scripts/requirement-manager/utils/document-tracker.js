@@ -16,7 +16,7 @@ export async function scanDocuments(reqPath) {
   try {
     const files = await fs.readdir(reqPath);
     return files.filter((file) => file.endsWith('.md') && file !== 'raw.md' && file !== '.agent-context.md' && !file.startsWith('.'));
-  } catch (error) {
+  } catch (_error) {
     return [];
   }
 }

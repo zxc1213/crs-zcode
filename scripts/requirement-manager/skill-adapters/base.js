@@ -53,7 +53,7 @@ export class BaseSkillAdapter {
    * @param {object} params - 技能参数
    * @returns {Promise<object>} 执行结果
    */
-  async execute(params) {
+  async execute(_params) {
     throw new Error('Subclass must implement execute()');
   }
 

@@ -93,6 +93,35 @@ describe('ID Generator Utility', () => {
     });
   });
 
+  describe('scope 路径加固', () => {
+    it('恶意 scope（含 ../）被 slugify 归一，counters 文件不逃出 .requirements', async () => {
+      process.env.CRS_ID_MODE = 'author_seq';
+      process.env.CRS_AUTHOR = '../../evil';
+
+      const id = await generate('feature');
+      expect(id).to.match(/^FEAT-\d{8}-\d{3}-[0-9a-f]{6}$/);
+
+      // 实际写入的文件应留在 .requirements/ 内（scope 已归一为 evil）
+      const inside = path.join(COUNTERS_DIR, 'counters-evil.json');
+      const escaped = path.resolve('counters-evil.json'); // 若穿越成功会写到项目根
+      const insideExists = await fs
+        .access(inside)
+        .then(() => true)
+        .catch(() => false);
+      const escapedExists = await fs
+        .access(escaped)
+        .then(() => true)
+        .catch(() => false);
+
+      expect(insideExists).to.be.true;
+      expect(escapedExists).to.be.false;
+
+      await cleanupScope('evil');
+      process.env.CRS_ID_MODE = undefined;
+      process.env.CRS_AUTHOR = undefined;
+    });
+  });
+
   describe('resolveAuthor()', () => {
     it('should use CRS_AUTHOR env var when set', () => {
       process.env.CRS_AUTHOR = 'Alice';

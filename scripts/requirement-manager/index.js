@@ -13,7 +13,7 @@
 import { Processor } from './core/processor.js';
 import { schedule, generateSkillPrompt } from './core/scheduler.js';
 import securityFilter from './features/security.js';
-import { info, success, warn, error } from './utils/logger.js';
+import { info, success, error } from './utils/logger.js';
 import Dashboard from './ui/dashboard.js';
 import { CHANGE_LEVELS, EVENT_TYPES } from './core/schema.js';
 import path from 'path';

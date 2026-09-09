@@ -11,7 +11,6 @@
  *     | node hooks/session-start.mjs
  */
 
-import path from 'path';
 import { readActiveRequirement, readStdinJson, emitAdditionalContext, emitNothing } from './lib.mjs';
 
 const input = await readStdinJson();

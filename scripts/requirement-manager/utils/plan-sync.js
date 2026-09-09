@@ -8,7 +8,7 @@
  */
 
 import { readMeta } from './storage.js';
-import { scanSubDirectoryStatus, isDocumentFilled } from './document-tracker.js';
+import { scanSubDirectoryStatus } from './document-tracker.js';
 import path from 'path';
 import fs from 'fs/promises';
 

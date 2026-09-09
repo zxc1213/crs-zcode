@@ -36,7 +36,7 @@ export class GitIntegration {
         cwd: this.baseDir,
       });
       return stdout.trim().length > 0;
-    } catch (error) {
+    } catch (_error) {
       return false;
     }
   }
@@ -51,7 +51,7 @@ export class GitIntegration {
         cwd: this.baseDir,
       });
       return stdout.trim();
-    } catch (error) {
+    } catch (_error) {
       return null;
     }
   }

@@ -17,29 +17,6 @@ const DATA_FILE = path.join(METRICS_DIR, 'data.yaml');
 const CONFIG_FILE = path.join(METRICS_DIR, 'config.json');
 
 /**
- * 加载配置文件
- */
-function loadConfig() {
-  if (fs.existsSync(CONFIG_FILE)) {
-    const content = fs.readFileSync(CONFIG_FILE, 'utf8');
-    return JSON.parse(content);
-  }
-  return {
-    metrics: {
-      collection: {
-        enabled: true,
-        retentionDays: 90,
-      },
-      targets: {
-        cycle_time: 2.0,
-        rework_rate: 0.15,
-        quality_gate_pass_rate: 0.9,
-      },
-    },
-  };
-}
-
-/**
  * 加载现有度量数据
  */
 function loadMetricsData() {
@@ -280,8 +257,7 @@ function collectValueMetrics(requirements) {
 function collectAllMetrics() {
   console.log('📊 开始收集度量数据...\n');
 
-  // 加载配置和数据
-  const config = loadConfig();
+  // 加载现有度量数据（配置仅在有告警/目标值逻辑时才需要，当前收集流程不读）
   const data = loadMetricsData();
 
   // 扫描需求
@@ -441,25 +417,22 @@ function exportData(format = 'json') {
   const data = loadMetricsData();
   const timestamp = new Date().toISOString().split('T')[0];
 
-  let content, filename, ext;
+  let content, filename;
 
   switch (format) {
     case 'json':
       content = JSON.stringify(data, null, 2);
       filename = `metrics-${timestamp}.json`;
-      ext = 'json';
       break;
 
     case 'csv':
       content = convertToCSV(data);
       filename = `metrics-${timestamp}.csv`;
-      ext = 'csv';
       break;
 
     case 'markdown':
       content = convertToMarkdown(data);
       filename = `metrics-${timestamp}.md`;
-      ext = 'md';
       break;
 
     default:
@@ -482,7 +455,7 @@ function exportData(format = 'json') {
 function convertToCSV(data) {
   const lines = ['date,metric,value,sample_size,details'];
 
-  for (const [metricType, records] of Object.entries(data.metrics)) {
+  for (const [, records] of Object.entries(data.metrics)) {
     for (const record of records) {
       lines.push([record.date, record.metric, record.value, record.sample_size || record.total || 'N/A', record.details || ''].join(','));
     }

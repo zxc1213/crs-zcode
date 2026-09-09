@@ -3,7 +3,7 @@
  */
 
 import { generate } from '../utils/id-generator.js';
-import { readMeta, writeMeta, exists } from '../utils/storage.js';
+import { readMeta, writeMeta } from '../utils/storage.js';
 import { trackDocuments } from '../utils/document-tracker.js';
 import { syncPlanStatus, syncIndexTables } from '../utils/plan-sync.js';
 import { TYPE_PREFIXES, TYPE_DIRS, STATUSES, normalizeStatus } from './schema.js';
@@ -134,7 +134,6 @@ export class Processor {
 
     // 生成 ID (现在生成ID是异步操作)
     const id = await generate(type);
-    const prefix = TYPE_PREFIXES[type];
 
     // 确定类型目录
     const typeDir = TYPE_DIRS[type] || `${type}s`;
@@ -555,7 +554,7 @@ planning → analyzed → implementing → review → done
   async rebuildIndex() {
     this.index.clear();
 
-    for (const [type, dir] of Object.entries(TYPE_DIRS)) {
+    for (const [, dir] of Object.entries(TYPE_DIRS)) {
       const typePath = path.join(this.requirementsDir, dir);
 
       try {

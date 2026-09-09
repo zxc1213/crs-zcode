@@ -100,12 +100,14 @@ export function resolveHostname() {
 /**
  * 获取 counters 文件路径（按 scope 隔离）
  * @param {string|null|undefined} scope - 作者/机器名；null/undefined 表示默认共享文件
- * scope 进入文件名前做边界校验，防止路径拼接逃逸
+ * 双重防线：scope 先经 slugify 白名单归一（只留 [a-z0-9-]，路径分隔符在结构上不可能出现），
+ * 归一结果拼出的路径再做根目录边界校验
  */
 function getCountersFile(scope) {
   if (!scope) return path.join(COUNTERS_DIR, 'counters.json');
+  const safe = slugify(scope);
   const root = path.resolve(COUNTERS_DIR);
-  const file = path.resolve(root, `counters-${String(scope)}.json`);
+  const file = path.resolve(root, `counters-${safe}.json`);
   if (!file.startsWith(root + path.sep)) {
     throw new Error(`illegal counters scope: ${scope}`);
   }

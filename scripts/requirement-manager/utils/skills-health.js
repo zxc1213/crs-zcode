@@ -194,7 +194,7 @@ export class SkillsHealthChecker {
       lines.push('📋 建议操作:');
       lines.push('');
 
-      for (const [name, result] of results.entries()) {
+      for (const [, result] of results.entries()) {
         if (!result.available) {
           const hint = this.getInstallHint(result);
           lines.push(`  ${result.displayName}:`);

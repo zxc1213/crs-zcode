@@ -4,7 +4,8 @@
  *
  * On session end, when a project has an active requirement:
  * - sync index tables (pending -> filled) and meta.yaml status into plan.md
- * - count execution.log entries and report a short summary via additionalContext
+ * - count execution.log entries and report a summary via additionalContext
+ *   (text from the rules engine template `stop_summary`)
  *
  * Manual smoke test:
  *   printf '%s\n' '{"hook_event_name":"Stop","session_id":"t","cwd":"<project>"}' \
@@ -51,8 +52,12 @@ if (lines <= 0) {
   process.exit(0);
 }
 
-emitAdditionalContext(
-  eventName,
-  `[crs] Session summary — active requirement ${active.target}: ${lines} logged operations, ` +
-    'requirement documents synced (index tables + plan progress).',
-);
+// 总结文案来自规则引擎模板（不可用时静默，不阻塞会话结束）
+try {
+  const { loadRules, applyPlaceholders } = await import('../scripts/requirement-manager/core/rules.js');
+  const rules = await loadRules(cwd);
+  const summary = applyPlaceholders(rules.templates.stop_summary, { id: active.target, n: lines });
+  emitAdditionalContext(eventName, summary);
+} catch (_err) {
+  emitNothing();
+}

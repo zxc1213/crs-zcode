@@ -4,9 +4,12 @@
  *
  * If the current project has an active requirement, inject its ID/status so
  * the agent immediately knows which requirement is in flight and which
- * workflow rules apply. Additionally, when a docs-map exists and has drifted
- * entries, append a one-line reminder. Silent when there is no .requirements
- * directory or no docs-map.yaml.
+ * workflow rules apply. Message text comes from the rules engine templates
+ * (scripts/requirement-manager/core/rules.js; project overrides in
+ * .requirements/_system/rules.yaml). Additionally:
+ * - when a docs-map exists with drifted entries, append the drift reminder
+ * - inject-type rules are appended within the inject budget (priority order)
+ * Silent when there is no .requirements directory.
  *
  * Manual smoke test:
  *   printf '%s\n' '{"hook_event_name":"SessionStart","session_id":"t","source":"startup","cwd":"<project>"}' \
@@ -27,6 +30,18 @@ if (!fs.existsSync(requirementsDir)) {
   process.exit(0);
 }
 
+// 规则引擎不可用时静默降级（与 drift check 口径一致）
+let rules = null;
+let applyPlaceholders = (text) => text;
+try {
+  const engine = await import('../scripts/requirement-manager/core/rules.js');
+  rules = await engine.loadRules(cwd);
+  applyPlaceholders = engine.applyPlaceholders;
+} catch (_err) {
+  emitNothing();
+  process.exit(0);
+}
+
 const active = readActiveRequirement(cwd);
 
 // docs-map 漂移轻提示（仅在已建立文档地图时；unregistered 属于 --scan-docs 的职责，不在这里打扰）
@@ -38,16 +53,19 @@ if (fs.existsSync(docsMapFile)) {
     const drift = await checkDrift(cwd);
     const driftedCount = drift.stale.length + drift.unconfirmed.length;
     if (driftedCount > 0) {
-      driftHint = ` Docs-map: ${driftedCount} registered doc(s) drifted/unconfirmed — run crs-project-sync --scan-docs to review, or /crs:req --dashboard for details.`;
+      driftHint = applyPlaceholders(rules.templates.session_drift, { count: driftedCount });
     }
   } catch (_err) {
     // drift check must never break the session start
   }
 }
 
+const budget = rules.inject_budget_chars;
+
 if (!active || !active.target) {
   if (driftHint) {
-    emitAdditionalContext(eventName, `[crs]${driftHint}`);
+    const text = `[crs]${driftHint}`;
+    emitAdditionalContext(eventName, text.length <= budget ? text : text.slice(0, budget));
   } else {
     emitNothing();
   }
@@ -56,12 +74,25 @@ if (!active || !active.target) {
 
 const phaseHint =
   active.status === 'planning' || active.status === 'analyzed'
-    ? 'Current phase forbids editing files outside .requirements/ until all 5 document stages are filled.'
-    : `Requirement status: ${active.status}.`;
+    ? rules.templates.session_phase_locked
+    : applyPlaceholders(rules.templates.session_phase_status, { status: active.status });
 
-emitAdditionalContext(
-  eventName,
-  `[crs] Active requirement: ${active.target} (status: ${active.status}). ${phaseHint} ` +
-    'Use /crs:req --active or /crs:req --dashboard to inspect it.' +
-    driftHint,
-);
+// 主消息（活跃需求）优先保留，inject 规则在剩余预算内按 priority 追加
+let message = applyPlaceholders(rules.templates.session_active, {
+  id: active.target,
+  status: active.status,
+  phase_hint: phaseHint,
+});
+message += driftHint;
+
+const injectRules = rules.rules
+  .filter((rule) => rule.type === 'inject' && rule.enabled !== false)
+  .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+
+for (const rule of injectRules) {
+  const candidate = `${message} ${rule.message}`;
+  if (candidate.length > budget) continue; // 整条丢弃，尝试下一条更短的
+  message = candidate;
+}
+
+emitAdditionalContext(eventName, message);

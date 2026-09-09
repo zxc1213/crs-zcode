@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { readActiveRequirement } from '../../hooks/lib.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = path.dirname(__filename);
 const testRoot = join(__dirname, '..', '.tmp-hook-lib-test');
 
 function join(...parts) {

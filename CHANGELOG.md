@@ -2,6 +2,39 @@
 
 本文件记录 CRS ZCode 插件每个版本的变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循语义化。
 
+## [1.4.0] - 2026-09-09
+
+**主题：正确性与收敛——一轮全库代码审查后的集中修复。**
+
+### 修复
+
+- **知识图谱集成静默失效**：引擎 4 处调用传项目根而图谱按 `.requirements` 目录扫描，导致图谱永远为空、创建/更新/删除同步全部空转；`getKnowledgeGraph` 语义统一为收项目根并按路径缓存单例，补回归测试
+- **`kg-recommend` 命令必崩**：`recommendateRelated` 拼写错误（正确方法 `recommendRelated`），且推荐过滤参数用旧复数口径导致过滤永不命中
+- **`--force`/全量重建丢失项目历史**：`fullResync` 只保留 changelog，`timeline.yaml`（事件账本）与 `docs-map.yaml`（手工登记）被随备份挪走；现三个文件全部原位保留，补回归测试
+- **项目文档交付日期恒错**：聚合器引用不存在的 `meta.updated` 字段，functional-requirements.md 的交付日期列恒等于创建日期；现按 `completed → updatedAt → created` 取值
+- **DEBT（技术债）需求聚合永远 NOT_FOUND**：本地目录映射缺 tech-debt 推导成 `tech-debts`；tech-debt 提升进 schema 唯一口径（TYPE_DIRS/TYPE_PREFIXES）
+- **HTML 报告状态口径分叉**：导出侧状态表缺 `review`（评审中需求显示裸英文）；状态标签/颜色改为从 schema 派生，收集时统一归一旧词表
+- **`--offline` 假承诺**：既不内联 Mermaid 又仍渲染依赖图，报错文案还引导用户"用 --offline"；现离线模式直接跳过依赖图并修正提示
+- **图谱对无 spec.md 的需求整体跳过**：spec 读取容错降级，meta 存在即收录
+- 依赖提取正则缺词边界（`PREF-2026` 会误提取出 `REF-2026`）；状态分布饼图单一状态占 100% 时整环消失；渲染器类型分支用复数导致形状/配色设计永不命中
+
+### 变更
+
+- **词表收敛到 schema 唯一口径**：删除 8 处复制的类型↔前缀映射与目录映射（aggregator/design-summarizer/project-sync/storage/id-generator/export），plan-sync 完成度计算先归一旧状态词
+- **plan-sync 不再抹除人工编辑**：非终态时验收标准复选框不再被强制重置为未勾选（原每次 Stop hook 都会清掉手工勾选），引擎只在 done 时统一勾选
+- **性能**：仪表板一次全量扫描复用于统计/活跃/最近三处（原 3 遍）；PostToolUse hook 单次扫描复用（原每次工具调用扫两遍）
+- **健壮性**：metrics data.yaml 损坏时告警回退而非崩溃；CSV 导出按 RFC 4180 转义；plan-sync 失败日志改 stderr 且仅在 CRS_DEBUG 时输出；初始化错误指引指向真实入口
+
+### 移除
+
+- 死代码清理：`features/similarity.js`（查重职责已由知识图谱承担，且路径/词表三处硬伤）、`utils/skills-health.js`（339 行，旧生态技能清单）、`integrations/git.js`（249 行零引用）、`storage.createRequirementDir`/`plan-sync.syncAllIndexTables`/`document-tracker.addDocument` 等零引用导出、metrics 只写不读的 config.json
+- `crs-export --filter` 假参数（解析后被任何消费方忽略）；初始化不再创建无人使用的项目根 `templates/`、`logs/` 目录
+
+### 新增
+
+- SessionStart hook 注入 docs-map 过期轻提示（仅当已建立文档地图且存在漂移/未确认条目；无 docs-map 完全静默）
+- 回归测试 4 例（图谱路径语义/完成日期/账本保留），345 用例全绿
+
 ## [1.3.0] - 2026-09-09
 
 **主题：引擎重构——让维护者 10 分钟看懂核心链路。**

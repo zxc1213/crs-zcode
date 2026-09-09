@@ -46,7 +46,7 @@ crs-project-init - 初始化项目文档目录
   const reqsExists = await exists(path.join(baseDir, '.requirements'));
   if (!reqsExists) {
     console.error(`❌ .requirements/ 目录不存在于 ${baseDir}`);
-    console.error(`   请先执行 /req-init 或运行 crs-init 完成项目初始化`);
+    console.error(`   请先在项目中运行 /crs:req 创建首个需求（引擎会自动初始化目录）`);
     process.exit(1);
   }
 

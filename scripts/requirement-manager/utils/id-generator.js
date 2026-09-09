@@ -18,6 +18,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { execSync } from 'child_process';
+import { TYPE_PREFIXES as PREFIX_MAP } from '../core/schema.js';
 
 // 计数器内存缓存（仅 author_seq/hostname_seq 模式使用，会持久化到文件）
 const counters = {};
@@ -34,16 +35,6 @@ let cachedScope = undefined;
 
 // 合法的 ID 模式
 const VALID_MODES = ['fixed', 'hash_seq', 'author_seq', 'hostname_seq'];
-
-// 类型到前缀的映射
-const PREFIX_MAP = {
-  feature: 'FEAT',
-  bug: 'BUG',
-  question: 'QUES',
-  adjustment: 'ADJU',
-  refactor: 'REF',
-  'tech-debt': 'DEBT',
-};
 
 /**
  * 获取 ID 模式（带非法值 fallback）
@@ -238,14 +229,8 @@ export function parse(id) {
   // 旧日期格式: PREFIX-YYYYMMDD-XXX
   // 旧格式: PREFIX-NNNN
 
-  const prefixToType = {
-    FEAT: 'feature',
-    BUG: 'bug',
-    QUES: 'question',
-    ADJU: 'adjustment',
-    REF: 'refactor',
-    DEBT: 'tech-debt',
-  };
+  // 前缀 → 类型反查（schema 唯一口径）
+  const prefixToType = Object.fromEntries(Object.entries(PREFIX_MAP).map(([type, prefix]) => [prefix, type]));
 
   // 优先匹配 hash 格式
   let match = id.match(/^([A-Z]+)-(\d{8})-(\d{3})-([0-9a-f]{6})$/);

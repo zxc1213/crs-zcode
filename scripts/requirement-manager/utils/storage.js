@@ -5,26 +5,18 @@
 import fs from 'fs/promises';
 import path from 'path';
 import yaml from 'js-yaml';
+import { TYPE_DIRS } from '../core/schema.js';
 
 /**
- * 初始化目录结构
+ * 初始化目录结构（目录清单来自 schema 唯一口径；日志写在 .requirements/logs）
  * @param {string} baseDir - 基础目录路径
  */
 export async function init(baseDir) {
-  const dirs = [
-    baseDir,
-    path.join(baseDir, '.requirements'),
-    path.join(baseDir, '.requirements', 'features'),
-    path.join(baseDir, '.requirements', 'bugs'),
-    path.join(baseDir, '.requirements', 'questions'),
-    path.join(baseDir, '.requirements', 'adjustments'),
-    path.join(baseDir, '.requirements', 'refactors'),
-    path.join(baseDir, '.requirements', 'tech-debt'),
-    path.join(baseDir, '.requirements', 'project'),
-    path.join(baseDir, '.requirements', 'logs'),
-    path.join(baseDir, 'templates'),
-    path.join(baseDir, 'logs'),
-  ];
+  const dirs = [baseDir, path.join(baseDir, '.requirements'), path.join(baseDir, '.requirements', 'project'), path.join(baseDir, '.requirements', 'logs')];
+
+  for (const dirName of Object.values(TYPE_DIRS)) {
+    dirs.push(path.join(baseDir, '.requirements', dirName));
+  }
 
   for (const dir of dirs) {
     try {
@@ -50,37 +42,6 @@ export async function exists(filePath) {
   } catch {
     return false;
   }
-}
-
-/**
- * 创建需求目录
- * @param {string} baseDir - 基础目录
- * @param {string} type - 需求类型 (feature/bug/question/adjustment/refactor)
- * @param {string} id - 需求ID
- * @returns {Promise<string>} 创建的目录路径
- */
-export async function createRequirementDir(baseDir, type, id) {
-  const typeDir = type === 'tech-debt' ? 'tech-debt' : `${type}s`;
-  const reqPath = path.join(baseDir, '.requirements', typeDir, id);
-
-  await fs.mkdir(reqPath, { recursive: true });
-
-  // 创建初始元数据（规范口径：status=planning，日期字段 created/updatedAt）
-  const now = new Date().toISOString();
-  const meta = {
-    id,
-    type,
-    title: '',
-    description: '',
-    status: 'planning',
-    priority: 'medium',
-    created: now,
-    updatedAt: now,
-  };
-
-  await writeMeta(baseDir, reqPath, meta);
-
-  return reqPath;
 }
 
 /**
@@ -137,7 +98,6 @@ export async function cleanup(testDir) {
 export default {
   init,
   exists,
-  createRequirementDir,
   readMeta,
   writeMeta,
   cleanup,

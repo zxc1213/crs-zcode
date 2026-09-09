@@ -40,13 +40,16 @@ export class Dashboard {
   async show() {
     this.showHeader();
 
-    const stats = await this.getStatistics();
+    // 一次全量扫描，统计/活跃/最近三处复用（避免 3 遍全量 meta 读取）
+    const all = await this.getAllRequirements();
+
+    const stats = await this.getStatistics(all);
     this.showStatistics(stats);
 
-    const active = await this.getActiveRequirement();
+    const active = await this.getActiveRequirement(all);
     this.showActive(active);
 
-    await this.showRecent();
+    await this.showRecent(all);
 
     await this.showDocsMap();
   }
@@ -64,9 +67,10 @@ export class Dashboard {
 
   /**
    * 收集统计数据
+   * @param {Array} [all] - 预取的全量需求列表（缺省时自行扫描）
    * @returns {Promise<object>} 统计数据对象 { total, active, byStatus, byType }
    */
-  async getStatistics() {
+  async getStatistics(all) {
     const stats = {
       total: 0,
       active: 0,
@@ -80,7 +84,7 @@ export class Dashboard {
       },
     };
 
-    for (const meta of await this.getAllRequirements()) {
+    for (const meta of all || (await this.getAllRequirements())) {
       stats.total++;
       stats.byStatus[meta.status]++;
       if (meta.status !== 'done') {
@@ -120,11 +124,12 @@ export class Dashboard {
 
   /**
    * 获取活跃需求（非 done 状态中创建时间最新者，与 hooks 口径一致）
+   * @param {Array} [all] - 预取的全量需求列表（缺省时自行扫描）
    * @returns {Promise<object|null>} 活跃需求对象
    */
-  async getActiveRequirement() {
-    const all = await this.getAllRequirements();
-    const active = all.filter((meta) => isActiveStatus(meta.status));
+  async getActiveRequirement(all) {
+    const requirements = all || (await this.getAllRequirements());
+    const active = requirements.filter((meta) => isActiveStatus(meta.status));
     if (active.length === 0) {
       return null;
     }
@@ -153,11 +158,12 @@ export class Dashboard {
 
   /**
    * 显示最近需求
+   * @param {Array} [all] - 预取的全量需求列表（缺省时自行扫描）
    */
-  async showRecent() {
+  async showRecent(all) {
     console.log(chalk.cyan('📝 最近需求'));
 
-    const recent = await this.getRecentRequirements(10);
+    const recent = await this.getRecentRequirements(10, all);
 
     if (recent.length === 0) {
       console.log(chalk.gray('  暂无需求记录'));
@@ -188,10 +194,11 @@ export class Dashboard {
   /**
    * 获取最近需求
    * @param {number} limit - 限制数量
+   * @param {Array} [all] - 预取的全量需求列表（缺省时自行扫描）
    * @returns {Promise<Array>} 最近需求数组
    */
-  async getRecentRequirements(limit = 10) {
-    const allReqs = await this.getAllRequirements();
+  async getRecentRequirements(limit = 10, all) {
+    const allReqs = all || (await this.getAllRequirements());
 
     // 按创建时间倒序（兼容旧日期字段口径）
     allReqs.sort((a, b) => {

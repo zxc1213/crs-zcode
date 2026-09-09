@@ -20,6 +20,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { readFileSync } from 'fs';
+import { formatSize } from '../scripts/export/utils.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.dirname(__dirname);
@@ -46,9 +47,8 @@ crs-export v${VERSION} - 导出 HTML 需求报告
   -o, --output <path>           输出文件路径（默认 ./crs-report-{ts}.html）
   -t, --title <text>            报告标题
   -r, --requirements-dir <path> 需求目录路径（默认 ./.requirements）
-      --offline                 离线模式（不加载 Mermaid CDN）
+      --offline                 离线模式（不加载 Mermaid CDN，并跳过依赖图）
       --no-mermaid              禁用依赖图渲染
-  -f, --filter <expr>           默认过滤器（如 status=done）
   -q, --quiet                   静默模式（仅输出错误）
   -h, --help                    显示此帮助信息
   -v, --version                 显示版本号
@@ -115,15 +115,6 @@ function parseArgs(argv) {
           process.exit(2);
         }
         opts.requirementsDir = next;
-        i++;
-        break;
-      case '-f':
-      case '--filter':
-        if (!next) {
-          console.error('❌ --filter 需要参数');
-          process.exit(2);
-        }
-        opts.filter = next;
         i++;
         break;
       case '--offline':
@@ -209,7 +200,7 @@ async function main() {
     if (!opts.quiet) {
       console.log(`✅ 导出成功`);
       console.log(`   文件：${result.output.path}`);
-      console.log(`   大小：${(result.output.size / 1024).toFixed(1)} KB`);
+      console.log(`   大小：${formatSize(result.output.size)}`);
       console.log(`   需求数：${result.meta.totalReqs}`);
       console.log(`   耗时：${result.output.durationMs} ms`);
       if (result.warnings.length) {

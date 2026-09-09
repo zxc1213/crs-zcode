@@ -9,6 +9,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import yaml from 'js-yaml';
 import { exists } from '../requirement-manager/utils/storage.js';
+import { metaStatus } from '../requirement-manager/core/schema.js';
 import { REQ_TYPES, EXPORT_VERSION } from './types.js';
 
 /**
@@ -47,8 +48,8 @@ async function readMetaYaml(filePath) {
 function extractDependencies(content) {
   if (!content) return [];
   const deps = [];
-  // 匹配 markdown 链接中的需求 ID
-  const pattern = /(?:FEAT|BUG|QUES|ADJU|REF|DEBT)-[\w-]+/g;
+  // 匹配 markdown 链接中的需求 ID（词边界防 PREF-2026 误提取出 REF-2026）
+  const pattern = /\b(?:FEAT|BUG|QUES|ADJU|REF|DEBT)-[A-Za-z0-9-]+\b/g;
   const matches = content.match(pattern);
   if (matches) {
     for (const m of matches) {
@@ -97,7 +98,7 @@ async function collectRequirement(reqDir, type) {
     type: meta.type || type,
     title: meta.title || meta.description || '(无标题)',
     description: meta.description || '',
-    status: meta.status || 'unknown',
+    status: metaStatus(meta) || 'unknown',
     priority: meta.priority
       ? {
           level: meta.priority.level || 'P?',

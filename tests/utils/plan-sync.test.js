@@ -132,11 +132,12 @@ describe('plan-sync Utility', () => {
     });
 
     it('should handle all status values correctly', async () => {
+      // 旧词表 open/in_progress/completed/blocked 归一到规范口径后的完成度
       const statusTests = [
-        { status: 'open', expectedPercent: '0%' },
-        { status: 'in_progress', expectedPercent: '60%' },
-        { status: 'completed', expectedPercent: '100%' },
-        { status: 'blocked', expectedPercent: '25%' },
+        { status: 'open', expectedPercent: '0%' }, // open → planning = 0%
+        { status: 'in_progress', expectedPercent: '60%' }, // in_progress → implementing = 60%
+        { status: 'completed', expectedPercent: '100%' }, // completed → done = 100%
+        { status: 'blocked', expectedPercent: '60%' }, // blocked → implementing = 60%
       ];
 
       for (const { status, expectedPercent } of statusTests) {
@@ -260,7 +261,8 @@ describe('plan-sync Utility', () => {
       expect(uncheckedCount).to.equal(0);
     });
 
-    it('should uncheck all criteria when status is open', async () => {
+    it('should preserve manual checks for non-done statuses (no reset)', async () => {
+      // 非终态不回退手工勾选：引擎只在 done 时统一勾选，不抹除人工编辑
       const reqPath = path.join(TEST_BASE_DIR, 'FEAT-AC-002');
       await fs.mkdir(reqPath, { recursive: true });
 
@@ -290,8 +292,8 @@ describe('plan-sync Utility', () => {
       const checkedCount = (updated.match(/- \[x\]/g) || []).length;
       const uncheckedCount = (updated.match(/- \[ \]/g) || []).length;
 
-      expect(checkedCount).to.equal(0); // 全部不勾选
-      expect(uncheckedCount).to.equal(2);
+      expect(checkedCount).to.equal(2); // 手工勾选被保留
+      expect(uncheckedCount).to.equal(0);
     });
 
     it('should preserve criteria when status is in_progress', async () => {

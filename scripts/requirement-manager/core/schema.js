@@ -43,15 +43,17 @@ export const TYPE_PREFIXES = {
   question: 'QUES',
   adjustment: 'ADJU',
   refactor: 'REF',
+  'tech-debt': 'DEBT',
 };
 
-/** 类型 → .requirements/ 子目录（唯一拼写：refactors） */
+/** 类型 → .requirements/ 子目录（唯一拼写：refactors；tech-debt 目录名不加复数） */
 export const TYPE_DIRS = {
   feature: 'features',
   bug: 'bugs',
   question: 'questions',
   adjustment: 'adjustments',
   refactor: 'refactors',
+  'tech-debt': 'tech-debt',
 };
 
 /** 旧目录拼写 → 规范目录拼写（读取侧兼容） */

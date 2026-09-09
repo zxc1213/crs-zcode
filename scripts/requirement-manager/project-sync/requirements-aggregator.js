@@ -11,17 +11,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import yaml from 'js-yaml';
-
-/**
- * 支持的需求类型 → 目录映射
- */
-const TYPE_DIRS = {
-  feature: 'features',
-  bug: 'bugs',
-  question: 'questions',
-  adjustment: 'adjustments',
-  refactor: 'refactors',
-};
+import { TYPE_DIRS, TYPE_PREFIXES, requirementDate } from '../core/schema.js';
 
 /**
  * 安全读取文件内容（失败返回 null）
@@ -80,8 +70,9 @@ async function loadRequirement(reqDir) {
 
   const summary = await extractBackgroundSummary(path.join(reqDir, 'spec'));
 
-  // 实现/完成日期：优先 updated，回退 created
-  const completedAt = meta.updated || meta.created || '';
+  // 实现/完成日期：优先 completed（引擎补写），回退 updatedAt / created
+  const completedAt =
+    requirementDate(meta, 'completed') || requirementDate(meta, 'updated') || meta.created || '';
 
   return {
     id: meta.id,
@@ -142,14 +133,25 @@ export async function aggregateRequirements(baseDir, options = {}) {
     refactors: [],
     adjustments: [],
     questions: [],
+    techDebt: [],
   };
 
-  for (const typeName of Object.keys(TYPE_DIRS)) {
+  for (const [typeName, dirName] of Object.entries(TYPE_DIRS)) {
     const list = await loadTypeRequirements(baseDir, typeName);
-    grouped[`${typeName}s`] = onlyDone ? list.filter((r) => r.status === 'done') : list;
+    const filtered = onlyDone ? list.filter((r) => r.status === 'done') : list;
+    // 分组键：目录名（复数）为既有消费约定；tech-debt 目录名无复数形式，映射为 techDebt
+    const groupKey = dirName === 'tech-debt' ? 'techDebt' : dirName;
+    grouped[groupKey] = filtered;
   }
 
-  const all = [...grouped.features, ...grouped.bugs, ...grouped.refactors, ...grouped.adjustments, ...grouped.questions];
+  const all = [
+    ...grouped.features,
+    ...grouped.bugs,
+    ...grouped.refactors,
+    ...grouped.adjustments,
+    ...grouped.questions,
+    ...grouped.techDebt,
+  ];
 
   return {
     ...grouped,
@@ -165,20 +167,12 @@ export async function aggregateRequirements(baseDir, options = {}) {
  * @returns {Promise<object|null>}
  */
 export async function aggregateSingleRequirement(baseDir, reqId) {
-  // 从 ID 前缀推断类型目录
+  // 从 ID 前缀推断类型（前缀口径来自 schema 唯一定义）
   const prefix = reqId.split('-')[0];
-  const prefixToType = {
-    FEAT: 'feature',
-    BUG: 'bug',
-    QUES: 'question',
-    ADJU: 'adjustment',
-    REF: 'refactor',
-    DEBT: 'tech-debt',
-  };
-  const type = prefixToType[prefix];
+  const type = Object.entries(TYPE_PREFIXES).find(([, p]) => p === prefix)?.[0];
   if (!type) return null;
 
-  const typeDir = TYPE_DIRS[type] || `${type}s`;
+  const typeDir = TYPE_DIRS[type];
   const reqDir = path.join(baseDir, '.requirements', typeDir, reqId);
 
   try {
@@ -229,7 +223,7 @@ export function formatBusinessTable(allReqs) {
   if (!allReqs.length) return '| _暂无业务需求_ | - | - |';
   return allReqs
     .map((r) => {
-      return `| ${r.title} | ${r.type} | [${r.id}](../${TYPE_DIRS[r.type] || r.type + 's'}/${r.id}/spec.md) |`;
+      return `| ${r.title} | ${r.type} | [${r.id}](../${TYPE_DIRS[r.type] || r.type}/${r.id}/spec.md) |`;
     })
     .join('\n');
 }

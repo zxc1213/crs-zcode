@@ -11,9 +11,9 @@
  */
 
 import { getKnowledgeGraph, rebuildKnowledgeGraph } from '../scripts/knowledge-graph/index.js';
-import { resolve } from 'path';
 
-const requirementsPath = resolve('.requirements');
+// getKnowledgeGraph 收项目根，内部解析到 {root}/.requirements
+const baseDir = process.cwd();
 
 async function main() {
   const command = process.argv[2];
@@ -56,7 +56,7 @@ async function main() {
  * @param {string} [limit='5']
  */
 async function searchCommand(query, limit = '5') {
-  const graph = await getKnowledgeGraph(requirementsPath);
+  const graph = await getKnowledgeGraph(baseDir);
   const results = graph.findSimilarRequirements(query, parseInt(limit));
 
   console.log(`\n🔍 搜索结果: "${query}"`);
@@ -77,7 +77,7 @@ async function searchCommand(query, limit = '5') {
  * 显示统计信息
  */
 async function statsCommand() {
-  const graph = await getKnowledgeGraph(requirementsPath);
+  const graph = await getKnowledgeGraph(baseDir);
   const stats = graph.getStats();
 
   console.log('\n📊 知识图谱统计\n');
@@ -106,7 +106,7 @@ async function statsCommand() {
  * @param {string} reqId
  */
 async function connectionsCommand(reqId) {
-  const graph = await getKnowledgeGraph(requirementsPath);
+  const graph = await getKnowledgeGraph(baseDir);
   const connections = graph.getKnowledgeConnections(reqId, 2);
 
   console.log(`\n🔗 需求关联: ${reqId}\n`);
@@ -125,9 +125,9 @@ async function connectionsCommand(reqId) {
  * 智能推荐
  */
 async function recommendCommand() {
-  const graph = await getKnowledgeGraph(requirementsPath);
-  const recommendations = graph.recommendateRelated({
-    currentType: 'features',
+  const graph = await getKnowledgeGraph(baseDir);
+  const recommendations = graph.recommendRelated({
+    currentType: 'feature',
     currentTags: [],
     currentPriority: 'P0',
   });
@@ -149,7 +149,7 @@ async function recommendCommand() {
  */
 async function rebuildCommand() {
   console.log('🔄 重建知识图谱索引...');
-  await rebuildKnowledgeGraph();
+  await rebuildKnowledgeGraph(baseDir);
   console.log('✅ 重建完成');
 }
 

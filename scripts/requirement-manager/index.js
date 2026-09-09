@@ -9,6 +9,7 @@
 import { Processor } from './core/processor.js';
 import { runCreationFlow } from './core/creation-flow.js';
 import { handleChange, handleEvent } from './core/change-events.js';
+import { STATUS_LABELS, STATUS_COLORS } from './core/schema.js';
 import securityFilter from './features/security.js';
 import { error } from './utils/logger.js';
 import Dashboard from './ui/dashboard.js';
@@ -212,8 +213,8 @@ class RequirementManager {
       };
     }
 
-    const labels = { planning: '规划中', analyzed: '已分析', implementing: '实现中', review: '评审中', done: '已完成' };
-    const colors = { planning: 'yellow', analyzed: 'cyan', implementing: 'blue', review: 'magenta', done: 'green' };
+    const labels = STATUS_LABELS;
+    const colors = STATUS_COLORS;
     const status = labels[meta.status] ? meta.status : 'planning';
     const reqPath = this.processor.getRequirementPath(id);
 

@@ -25,7 +25,7 @@ import { scanProjectStructure } from './structure-scanner.js';
 import { aggregateRequirements, aggregateSingleRequirement, formatFeatureTableRows, formatFeatureDetails, formatBusinessTable } from './requirements-aggregator.js';
 import { summarizeDesign, summarizeSingleDesign, detectDesignChange } from './design-summarizer.js';
 import { appendEvent } from './timeline.js';
-import { CHANGE_LEVELS } from '../core/schema.js';
+import { CHANGE_LEVELS, TYPE_PREFIXES, TYPE_DIRS } from '../core/schema.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = path.resolve(__dirname, '../../../templates/project');
@@ -477,12 +477,10 @@ export async function syncOnBugFixed(baseDir, bugId) {
       return result;
     }
 
-    // 检测设计变更
+    // 检测设计变更（前缀 → 目录口径来自 schema；非 bug/DEBT 前缀回退 bugs 目录兼容旧调用）
     const prefix = bugId.split('-')[0];
-    const prefixToType = { BUG: 'bug', DEBT: 'tech-debt' };
-    const type = prefixToType[prefix] || 'bug';
-    const typeDir = type === 'tech-debt' ? 'tech-debt' : 'bugs';
-    const bugDir = path.join(baseDir, '.requirements', typeDir, bugId);
+    const type = Object.entries(TYPE_PREFIXES).find(([, p]) => p === prefix)?.[0] || 'bug';
+    const bugDir = path.join(baseDir, '.requirements', TYPE_DIRS[type], bugId);
 
     const { hasDesignChange, reason } = await detectDesignChange(bugDir);
     const affectedDocs = [];
@@ -659,13 +657,16 @@ export async function fullResync(baseDir) {
 
   try {
     // 全量重生成 = force 初始化（会备份 + 重建）
-    // 注意：changelog 由 force 模式保留（不会被覆盖）
-    const changelogPath = path.join(baseDir, '.requirements', 'project', 'changelog.md');
-    let changelogBackup = null;
-    try {
-      changelogBackup = await fs.readFile(changelogPath, 'utf-8');
-    } catch (_error) {
-      // 无 changelog 也继续
+    // 注意：changelog、timeline.yaml（事件账本）、docs-map.yaml（手工精化的登记）都随备份保留
+    const projectDir = path.join(baseDir, '.requirements', 'project');
+    const preserveFiles = ['changelog.md', 'timeline.yaml', 'docs-map.yaml'];
+    const backups = {};
+    for (const name of preserveFiles) {
+      try {
+        backups[name] = await fs.readFile(path.join(projectDir, name), 'utf-8');
+      } catch (_error) {
+        // 该文件不存在也继续
+      }
     }
 
     const initResult = await initializeProjectDocs(baseDir, { force: true });
@@ -673,10 +674,12 @@ export async function fullResync(baseDir) {
     result.created.push(...initResult.created);
     result.updated.push(...initResult.updated);
 
-    // 恢复 changelog
-    if (changelogBackup) {
-      await fs.writeFile(changelogPath, changelogBackup, 'utf-8');
-      result.updated.push('changelog.md (restored)');
+    // 恢复保留文件
+    for (const name of preserveFiles) {
+      if (backups[name] !== undefined) {
+        await fs.writeFile(path.join(projectDir, name), backups[name], 'utf-8');
+        result.updated.push(`${name} (restored)`);
+      }
     }
 
     // 追加本次 resync 记录

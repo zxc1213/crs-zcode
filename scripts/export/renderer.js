@@ -73,7 +73,8 @@ function renderBody(data, options) {
     renderHeader(data, options),
     renderOverview(data),
     renderStatusChart(data),
-    !options.noMermaid ? renderDepGraph(data) : '',
+    // 离线模式无法加载 Mermaid CDN，依赖图一并跳过（与 --no-mermaid 同路径）
+    !options.noMermaid && !options.offline ? renderDepGraph(data) : '',
     renderReqList(data),
     renderTimeline(data),
     renderGrowth(data),
@@ -167,7 +168,9 @@ function renderStatusChart(data) {
   const legends = [];
 
   for (const [status, count] of entries) {
-    const angle = (count / total) * Math.PI * 2;
+    let angle = (count / total) * Math.PI * 2;
+    // 单一状态占 100% 时弧线起终点重合会被 SVG 省略，留一个不可见的微偏移
+    if (angle >= Math.PI * 2) angle = Math.PI * 2 - 1e-4;
     const endAngle = startAngle + angle;
     const largeArc = angle > Math.PI ? 1 : 0;
 
@@ -251,16 +254,18 @@ function renderDepGraph(data) {
 }
 
 function shapeForType(type) {
-  // 不同类型不同形状
+  // 不同类型不同形状（type 为 schema 规范单数口径）
   switch (type) {
-    case 'features':
+    case 'feature':
       return { open: '[', close: ']' };
-    case 'bugs':
+    case 'bug':
       return { open: '((', close: '))' };
-    case 'refactors':
+    case 'refactor':
       return { open: '{{', close: '}}' };
-    case 'questions':
+    case 'question':
       return { open: '>', close: ']' };
+    case 'tech-debt':
+      return { open: '<', close: '>' };
     default:
       return { open: '(', close: ')' };
   }
@@ -678,7 +683,7 @@ const CLIENT_JS = `
     var mermaidEls = document.querySelectorAll('.mermaid');
     if (mermaidEls.length > 0) {
       mermaidEls.forEach(function(el) {
-        el.innerHTML = '<div class="mermaid-fallback"><p>📊 依赖图加载失败（Mermaid CDN 不可达）</p><p class="small">使用 <code>--offline</code> 选项可内联 Mermaid 库</p></div>';
+        el.innerHTML = '<div class="mermaid-fallback"><p>📊 依赖图加载失败（Mermaid CDN 不可达）</p><p class="small">请检查网络后重新导出，或使用 <code>--no-mermaid</code> 跳过依赖图</p></div>';
       });
     }
   }
@@ -732,11 +737,12 @@ const CSS = `
   .req-table tr:hover { background: #f9fafb; }
   .col-id code, code { background: #f3f4f6; padding: 2px 6px; border-radius: 3px; font-family: 'Menlo', 'Consolas', monospace; font-size: 12px; color: #6366f1; }
   .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; background: #e0e7ff; color: #4338ca; }
-  .tag-features { background: #dbeafe; color: #1d4ed8; }
-  .tag-bugs { background: #fee2e2; color: #b91c1c; }
-  .tag-questions { background: #fef3c7; color: #b45309; }
-  .tag-adjustments { background: #f3e8ff; color: #7c3aed; }
-  .tag-refactors { background: #d1fae5; color: #047857; }
+  .tag-feature { background: #dbeafe; color: #1d4ed8; }
+  .tag-bug { background: #fee2e2; color: #b91c1c; }
+  .tag-question { background: #fef3c7; color: #b45309; }
+  .tag-adjustment { background: #f3e8ff; color: #7c3aed; }
+  .tag-refactor { background: #d1fae5; color: #047857; }
+  .tag-tech-debt { background: #f3f4f6; color: #4b5563; }
   .status-pill, .priority-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; color: #fff; font-weight: 500; }
   .link-detail { color: #3b82f6; text-decoration: none; }
   .link-detail:hover { text-decoration: underline; }

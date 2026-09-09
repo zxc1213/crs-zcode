@@ -34,9 +34,11 @@ if (!fs.existsSync(requirementsDir)) {
   process.exit(0);
 }
 
+// 活跃需求一次扫描，日志与阶段守卫两处复用（该 hook 每次工具调用都会执行）
+const active = readActiveRequirement(cwd);
+
 // 1. execution log (per active requirement, same path the Stop hook reads)
 try {
-  const active = readActiveRequirement(cwd);
   if (active) {
     const timestamp = new Date().toISOString();
     fs.appendFileSync(path.join(active.reqPath, 'execution.log'), `[${timestamp}] Tool: ${toolName}\n`, 'utf8');
@@ -48,22 +50,19 @@ try {
 // 2. phase gate: block-editing hint while requirement is planning/analyzed
 if (toolName === 'Edit' || toolName === 'Write') {
   const filePath = toolInput.file_path;
-  if (filePath) {
-    const active = readActiveRequirement(cwd);
-    if (active && (active.status === 'planning' || active.status === 'analyzed')) {
-      const absReqsDir = path.resolve(requirementsDir);
-      const absFilePath = path.resolve(filePath);
-      const insideReqs =
-        absFilePath.startsWith(absReqsDir + path.sep) || absFilePath.startsWith(absReqsDir + '/');
-      if (!insideReqs) {
-        emitAdditionalContext(
-          eventName,
-          `[crs] Phase violation: active requirement ${active.target} is "${active.status}". ` +
-            `Editing ${absFilePath} is not allowed yet. ` +
-            'Finish the 5 document stages (spec -> test-cases -> plan) before touching code.',
-        );
-        process.exit(0);
-      }
+  if (filePath && active && (active.status === 'planning' || active.status === 'analyzed')) {
+    const absReqsDir = path.resolve(requirementsDir);
+    const absFilePath = path.resolve(cwd, filePath);
+    const insideReqs =
+      absFilePath.startsWith(absReqsDir + path.sep) || absFilePath.startsWith(absReqsDir + '/');
+    if (!insideReqs) {
+      emitAdditionalContext(
+        eventName,
+        `[crs] Phase violation: active requirement ${active.target} is "${active.status}". ` +
+          `Editing ${absFilePath} is not allowed yet. ` +
+          'Finish the 5 document stages (spec -> analyzed -> implementing -> test-cases -> plan) before touching code.',
+      );
+      process.exit(0);
     }
   }
 }

@@ -13,8 +13,9 @@ describe('KnowledgeGraph', () => {
   let graph;
 
   beforeEach(async () => {
-    // 创建测试目录结构
+    // 创建测试目录结构（目录名与 meta.type 均用规范单数口径，与引擎写入一致）
     const types = ['features', 'bugs'];
+    const singular = { features: 'feature', bugs: 'bug' };
 
     for (const type of types) {
       const typePath = join(testDir, type);
@@ -23,7 +24,7 @@ describe('KnowledgeGraph', () => {
       // 创建测试需求
       createTestRequirement(typePath, 'REQ-001', {
         id: 'REQ-001',
-        type: type,
+        type: singular[type],
         title: '用户登录功能',
         description: '实现用户登录和身份验证',
         priority: { level: 'P0', score: 9.0 },
@@ -34,11 +35,11 @@ describe('KnowledgeGraph', () => {
 
       createTestRequirement(typePath, 'REQ-002', {
         id: 'REQ-002',
-        type: type,
+        type: singular[type],
         title: '数据库连接优化',
         description: '优化数据库连接池配置',
         priority: { level: 'P1', score: 7.5 },
-        status: 'in_progress',
+        status: 'implementing',
         created_at: '2026-05-13T11:00:00Z',
         updated_at: '2026-05-13T11:00:00Z',
       });
@@ -65,11 +66,11 @@ describe('KnowledgeGraph', () => {
     });
 
     it('应该正确加载所有类型的需求', async () => {
-      const features = graph.getRequirementsByType('features');
-      const bugs = graph.getRequirementsByType('bugs');
+      const all = graph.getAllRequirements();
+      const types = new Set(all.map((r) => r.type));
 
-      expect(features.length).to.be.above(0);
-      expect(bugs.length).to.be.above(0);
+      expect(types.has('feature')).to.equal(true);
+      expect(types.has('bug')).to.equal(true);
     });
   });
 
@@ -110,59 +111,28 @@ describe('KnowledgeGraph', () => {
     it('应该按类型分组统计', () => {
       const stats = graph.getStats();
 
-      expect(stats.byType.features).to.not.be.undefined;
-      expect(stats.byType.bugs).to.not.be.undefined;
-    });
-  });
-
-  describe('#getRequirementsByType', () => {
-    it('应该按类型筛选需求', () => {
-      const features = graph.getRequirementsByType('features');
-
-      expect(features.length).to.be.above(0);
-      features.forEach((req) => {
-        expect(req.type).to.equal('features');
-      });
-    });
-  });
-
-  describe('#getRequirementsByStatus', () => {
-    it('应该按状态筛选需求', () => {
-      const planningReqs = graph.getRequirementsByStatus('planning');
-
-      planningReqs.forEach((req) => {
-        expect(req.status).to.equal('planning');
-      });
-    });
-  });
-
-  describe('#getRequirementsByPriority', () => {
-    it('应该按优先级筛选需求', () => {
-      const p0Reqs = graph.getRequirementsByPriority('P0');
-
-      p0Reqs.forEach((req) => {
-        expect(req.priority.level).to.equal('P0');
-      });
+      expect(stats.byType.feature).to.not.be.undefined;
+      expect(stats.byType.bug).to.not.be.undefined;
     });
   });
 
   describe('#recommendRelated', () => {
     it('应该基于上下文推荐相关需求', () => {
       const recommendations = graph.recommendRelated({
-        currentType: 'features',
+        currentType: 'feature',
         currentTags: [],
         currentPriority: 'P0',
       });
 
       expect(recommendations.length).to.be.above(0);
       recommendations.forEach((req) => {
-        expect(req.type).to.equal('features');
+        expect(req.type).to.equal('feature');
       });
     });
 
     it('应该按优先级排序推荐结果', () => {
       const recommendations = graph.recommendRelated({
-        currentType: 'features',
+        currentType: 'feature',
         currentTags: [],
         currentPriority: 'P0',
       });
@@ -176,7 +146,7 @@ describe('KnowledgeGraph', () => {
 
     it('应该限制推荐数量', () => {
       const recommendations = graph.recommendRelated({
-        currentType: 'features',
+        currentType: 'feature',
         currentTags: [],
         currentPriority: 'P0',
       });
@@ -189,7 +159,7 @@ describe('KnowledgeGraph', () => {
     it('应该成功添加新需求', async () => {
       const newReq = {
         id: 'REQ-003',
-        type: 'features',
+        type: 'feature',
         title: '新功能测试',
         description: '测试添加功能',
         priority: { level: 'P2', score: 6.0 },

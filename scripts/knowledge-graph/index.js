@@ -12,7 +12,8 @@
 
 import Fuse from 'fuse.js';
 import { readFileSync, readdirSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
+import yaml from 'js-yaml';
 import { TYPE_DIRS } from '../requirement-manager/core/schema.js';
 
 /**
@@ -75,12 +76,16 @@ export class KnowledgeGraph {
    * @returns {Promise<Object>}
    */
   async loadRequirement(metaPath, specPath) {
-    // 读取 meta.yaml（简化实现，实际应使用 YAML 解析器）
     const metaContent = readFileSync(metaPath, 'utf-8');
     const meta = this.parseMetaYaml(metaContent);
 
-    // 读取 spec.md
-    const specContent = readFileSync(specPath, 'utf-8');
+    // spec.md 缺失不阻断收录（keywords/tags 降级为空）
+    let specContent = '';
+    try {
+      specContent = readFileSync(specPath, 'utf-8');
+    } catch (_error) {
+      // 无 spec.md
+    }
 
     // 提取关键词
     const keywords = this.extractKeywords(specContent);
@@ -103,45 +108,18 @@ export class KnowledgeGraph {
   }
 
   /**
-   * 解析 meta.yaml（简化实现）
+   * 解析 meta.yaml（js-yaml 完整解析，损坏内容回退空对象）
    * @private
    * @param {string} content
    * @returns {Object}
    */
   parseMetaYaml(content) {
-    const lines = content.split('\n');
-    const result = {};
-    const stack = [{ obj: result, indent: -1 }];
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) continue;
-
-      const indent = line.search(/\S|$/);
-      const match = trimmed.match(/^(\w+):\s*(.+)?$/);
-
-      if (match) {
-        const [, key, value] = match;
-
-        // 找到正确的父级对象
-        while (stack.length > 1 && stack[stack.length - 1].indent >= indent) {
-          stack.pop();
-        }
-
-        const parent = stack[stack.length - 1].obj;
-
-        if (value === undefined) {
-          // 嵌套对象开始
-          parent[key] = {};
-          stack.push({ obj: parent[key], indent });
-        } else {
-          // 简单值
-          parent[key] = value.trim();
-        }
-      }
+    try {
+      const parsed = yaml.load(content);
+      return parsed !== null && typeof parsed === 'object' ? parsed : {};
+    } catch (_error) {
+      return {};
     }
-
-    return result;
   }
 
   /**
@@ -338,33 +316,6 @@ export class KnowledgeGraph {
   }
 
   /**
-   * 根据类型筛选需求
-   * @param {string} type
-   * @returns {Array<Object>}
-   */
-  getRequirementsByType(type) {
-    return this.requirements.filter((r) => r.type === type);
-  }
-
-  /**
-   * 根据状态筛选需求
-   * @param {string} status
-   * @returns {Array<Object>}
-   */
-  getRequirementsByStatus(status) {
-    return this.requirements.filter((r) => r.status === status);
-  }
-
-  /**
-   * 根据优先级筛选需求
-   * @param {string} level
-   * @returns {Array<Object>}
-   */
-  getRequirementsByPriority(level) {
-    return this.requirements.filter((r) => r.priority.level === level);
-  }
-
-  /**
    * 智能推荐：基于上下文推荐相关需求
    * @param {Object} context
    * @param {string} [context.currentType]
@@ -398,11 +349,13 @@ export class KnowledgeGraph {
 let graphInstance = null;
 
 /**
- * @param {string} [requirementsPath='.requirements']
+ * 获取（或初始化）知识图谱单例
+ * @param {string} [baseDir] - 项目根目录（内部解析到 {baseDir}/.requirements）
  * @returns {Promise<KnowledgeGraph>}
  */
-export async function getKnowledgeGraph(requirementsPath = '.requirements') {
-  if (!graphInstance) {
+export async function getKnowledgeGraph(baseDir = process.cwd()) {
+  const requirementsPath = resolve(baseDir, '.requirements');
+  if (!graphInstance || graphInstance.requirementsPath !== requirementsPath) {
     graphInstance = new KnowledgeGraph(requirementsPath);
     await graphInstance.initialize();
   }
@@ -410,10 +363,14 @@ export async function getKnowledgeGraph(requirementsPath = '.requirements') {
 }
 
 /**
+ * 重建知识图谱单例（无实例时按项目根初始化）
+ * @param {string} [baseDir] - 项目根目录
  * @returns {Promise<void>}
  */
-export async function rebuildKnowledgeGraph() {
-  if (graphInstance) {
-    await graphInstance.rebuild();
+export async function rebuildKnowledgeGraph(baseDir = process.cwd()) {
+  if (!graphInstance || graphInstance.requirementsPath !== resolve(baseDir, '.requirements')) {
+    await getKnowledgeGraph(baseDir);
+    return;
   }
+  await graphInstance.rebuild();
 }

@@ -6,7 +6,6 @@ import fs from 'fs/promises';
 import {
   init,
   exists,
-  createRequirementDir,
   readMeta,
   writeMeta,
   cleanup,
@@ -30,24 +29,21 @@ describe('Storage Utility', () => {
       await init(TEST_BASE_DIR);
       const dirExists = await exists(TEST_BASE_DIR);
       expect(dirExists).to.equal(true);
-    });
-  });
-
-  describe('createRequirementDir(baseDir, type, id)', () => {
-    it('should create feature requirement directory', async () => {
-      await init(TEST_BASE_DIR);
-      const reqPath = await createRequirementDir(TEST_BASE_DIR, 'feature', 'FEAT-001');
-      expect(reqPath).to.include('FEAT-001');
-      const metaFile = path.join(reqPath, 'meta.yaml');
-      const metaExists = await exists(metaFile);
-      expect(metaExists).to.equal(true);
+      // schema 口径的类型目录与 project/logs 目录齐全，项目根不再有多余目录
+      expect(await exists(path.join(TEST_BASE_DIR, '.requirements', 'features'))).to.equal(true);
+      expect(await exists(path.join(TEST_BASE_DIR, '.requirements', 'tech-debt'))).to.equal(true);
+      expect(await exists(path.join(TEST_BASE_DIR, '.requirements', 'project'))).to.equal(true);
+      expect(await exists(path.join(TEST_BASE_DIR, 'templates'))).to.equal(false);
+      expect(await exists(path.join(TEST_BASE_DIR, 'logs'))).to.equal(false);
     });
   });
 
   describe('readMeta(baseDir, reqPath)', () => {
     it('should read existing metadata', async () => {
       await init(TEST_BASE_DIR);
-      const reqPath = await createRequirementDir(TEST_BASE_DIR, 'feature', 'FEAT-002');
+      const reqPath = path.join(TEST_BASE_DIR, '.requirements', 'features', 'FEAT-002');
+      await fs.mkdir(reqPath, { recursive: true });
+      await writeMeta(TEST_BASE_DIR, reqPath, { id: 'FEAT-002', type: 'feature' });
       const meta = await readMeta(TEST_BASE_DIR, reqPath);
       expect(meta).to.be.ok;
       expect(meta.id).to.equal('FEAT-002');

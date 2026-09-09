@@ -14,7 +14,6 @@ const BASE_DIR = process.cwd();
 const REQUIREMENTS_DIR = path.join(BASE_DIR, '.requirements');
 const METRICS_DIR = path.join(REQUIREMENTS_DIR, 'metrics');
 const DATA_FILE = path.join(METRICS_DIR, 'data.yaml');
-const CONFIG_FILE = path.join(METRICS_DIR, 'config.json');
 
 /**
  * 加载现有度量数据
@@ -22,7 +21,12 @@ const CONFIG_FILE = path.join(METRICS_DIR, 'config.json');
 function loadMetricsData() {
   if (fs.existsSync(DATA_FILE)) {
     const content = fs.readFileSync(DATA_FILE, 'utf8');
-    return yaml.load(content);
+    try {
+      const parsed = yaml.load(content);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch (error) {
+      console.error(`⚠️ metrics data.yaml 解析失败，已回退空数据: ${error.message}`);
+    }
   }
   return {
     metrics: {
@@ -30,7 +34,6 @@ function loadMetricsData() {
       rework_rate: [],
       change_frequency: [],
       completion_rate: [],
-      user_satisfaction: [],
     },
   };
 }
@@ -353,39 +356,6 @@ function initMetricsSystem() {
     }
   }
 
-  // 创建配置文件
-  if (!fs.existsSync(CONFIG_FILE)) {
-    const defaultConfig = {
-      metrics: {
-        collection: {
-          enabled: true,
-          interval: 'daily',
-          retentionDays: 90,
-        },
-        targets: {
-          cycle_time: 2.0,
-          rework_rate: 0.15,
-          completion_rate: 0.9,
-        },
-        alerts: {
-          enabled: true,
-          thresholds: {
-            cycle_time: { warning: 2.5, critical: 3.0 },
-            rework_rate: { warning: 0.15, critical: 0.2 },
-          },
-        },
-        reporting: {
-          frequency: 'weekly',
-          autoGenerate: false,
-          includeCharts: false,
-        },
-      },
-    };
-
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(defaultConfig, null, 2));
-    console.log(`   ✓ 创建配置: ${path.relative(BASE_DIR, CONFIG_FILE)}`);
-  }
-
   // 创建数据文件
   if (!fs.existsSync(DATA_FILE)) {
     const initialData = {
@@ -394,7 +364,6 @@ function initMetricsSystem() {
         rework_rate: [],
         change_frequency: [],
         completion_rate: [],
-        user_satisfaction: [],
       },
       last_updated: new Date().toISOString(),
     };
@@ -453,11 +422,20 @@ function exportData(format = 'json') {
  * 转换为 CSV 格式
  */
 function convertToCSV(data) {
+  // 含逗号/引号/换行的字段按 RFC 4180 包裹转义
+  const escapeCsv = (val) => {
+    const s = String(val ?? '');
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
   const lines = ['date,metric,value,sample_size,details'];
 
   for (const [, records] of Object.entries(data.metrics)) {
     for (const record of records) {
-      lines.push([record.date, record.metric, record.value, record.sample_size || record.total || 'N/A', record.details || ''].join(','));
+      lines.push(
+        [record.date, record.metric, record.value, record.sample_size || record.total || 'N/A', record.details || '']
+          .map(escapeCsv)
+          .join(',')
+      );
     }
   }
 

@@ -55,10 +55,11 @@
  * @typedef {Object} ExportOptions
  * @property {string} requirementsDir - 需求目录路径
  * @property {string} title - 报告标题
- * @property {boolean} offline - 离线模式（内联 Mermaid）
+ * @property {boolean} offline - 离线模式（不加载 CDN，同时跳过依赖图）
  * @property {boolean} noMermaid - 跳过依赖图
- * @property {string} defaultFilter - 默认过滤器
  */
+
+import { STATUS_LABELS as SCHEMA_STATUS_LABELS, STATUS_COLORS as SCHEMA_STATUS_COLORS } from '../requirement-manager/core/schema.js';
 
 export const EXPORT_VERSION = '1.0.0';
 export const REQ_TYPES = ['features', 'bugs', 'questions', 'adjustments', 'refactors'];
@@ -68,6 +69,7 @@ export const REQ_TYPE_LABELS = {
   question: '问题',
   adjustment: '调整',
   refactor: '重构',
+  'tech-debt': '技术债',
   // 兼容复数形式（如果 stats 直接来自目录名）
   features: '功能',
   bugs: '缺陷',
@@ -75,28 +77,22 @@ export const REQ_TYPE_LABELS = {
   adjustments: '调整',
   refactors: '重构',
 };
-export const STATUS_LABELS = {
-  planning: '规划中',
-  analyzed: '已分析',
-  in_progress: '实施中',
-  implementing: '实施中',
-  done: '已完成',
-  closed: '已关闭',
-  open: '进行中',
-  fixed: '已修复',
-  implemented: '已实现',
+
+/** 状态中文标签（schema 唯一口径派生） */
+export const STATUS_LABELS = { ...SCHEMA_STATUS_LABELS };
+
+/** chalk 颜色名 → HTML 报告用十六进制色值（schema 唯一口径派生） */
+const HEX_BY_CHALK = {
+  yellow: '#f59e0b',
+  cyan: '#06b6d4',
+  blue: '#3b82f6',
+  magenta: '#a855f7',
+  green: '#10b981',
 };
-export const STATUS_COLORS = {
-  done: '#10b981',
-  closed: '#10b981',
-  fixed: '#10b981',
-  implemented: '#10b981',
-  in_progress: '#3b82f6',
-  implementing: '#3b82f6',
-  analyzed: '#f59e0b',
-  planning: '#9ca3af',
-  open: '#3b82f6',
-};
+export const STATUS_COLORS = Object.fromEntries(
+  Object.entries(SCHEMA_STATUS_COLORS).map(([status, color]) => [status, HEX_BY_CHALK[color] || '#9ca3af'])
+);
+
 export const PRIORITY_COLORS = {
   P0: '#dc2626',
   P1: '#ea580c',
@@ -104,5 +100,3 @@ export const PRIORITY_COLORS = {
   P3: '#16a34a',
   P4: '#6b7280',
 };
-
-export const TYPES = {};

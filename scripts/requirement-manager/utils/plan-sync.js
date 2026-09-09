@@ -9,6 +9,7 @@
 
 import { readMeta } from './storage.js';
 import { scanSubDirectoryStatus } from './document-tracker.js';
+import { normalizeStatus } from '../core/schema.js';
 import path from 'path';
 import fs from 'fs/promises';
 
@@ -106,7 +107,10 @@ export async function syncPlanStatus(baseDir, reqPath) {
 
     return true;
   } catch (error) {
-    console.debug(`Plan sync skipped: ${error.message}`);
+    // 同步失败不应中断状态流转，仅在诊断模式输出
+    if (process.env.CRS_DEBUG) {
+      console.error(`[crs] plan sync failed: ${error.message}`);
+    }
     return false;
   }
 }
@@ -185,37 +189,6 @@ export async function syncIndexTables(reqPath) {
 }
 
 /**
- * 批量扫描所有需求并同步索引表
- * @param {string} requirementsDir - .requirements 目录
- * @returns {Promise<object>} 聚合结果
- */
-export async function syncAllIndexTables(requirementsDir) {
-  const typeDirs = ['features', 'bugs', 'questions', 'adjustments', 'refactors'];
-  const totalResults = { updated: 0, skipped: 0, errors: 0, reqCount: 0 };
-
-  for (const typeDir of typeDirs) {
-    const typePath = path.join(requirementsDir, typeDir);
-    try {
-      const entries = await fs.readdir(typePath, { withFileTypes: true });
-      for (const entry of entries) {
-        if (entry.isDirectory()) {
-          const reqPath = path.join(typePath, entry.name);
-          const result = await syncIndexTables(reqPath);
-          totalResults.updated += result.updated.length;
-          totalResults.skipped += result.skipped.length;
-          totalResults.errors += result.errors.length;
-          totalResults.reqCount++;
-        }
-      }
-    } catch {
-      // 目录不存在，跳过
-    }
-  }
-
-  return totalResults;
-}
-
-/**
  * 生成进度区块内容
  */
 function generateProgressBlock(meta) {
@@ -229,22 +202,17 @@ function generateProgressBlock(meta) {
  * 基于 status 计算完成度
  */
 function calculateCompletion(meta) {
-  switch (meta.status) {
+  // 状态先归一到规范口径（兼容 open/completed/closed 等旧词表）
+  switch (normalizeStatus(meta.status)) {
     case 'planning':
       return 10;
     case 'analyzed':
       return 30;
     case 'implementing':
-    case 'in_progress':
       return 60;
-    case 'blocked':
-      return 25;
     case 'review':
       return 85;
     case 'done':
-    case 'completed':
-      return 100;
-    case 'closed':
       return 100;
     default:
       return 0;
@@ -293,6 +261,7 @@ export async function syncAllPlans(baseDir, reqPaths) {
 
 /**
  * 同步验收标准章节的复选框状态
+ * 仅在 done 时统一勾选；非终态不回退手工勾选（引擎只代写完成态，不抹除人工编辑）
  */
 function syncAcceptanceCriteria(planContent, status) {
   const acceptanceRegex = /## 验收标准[\s\S]*?(?=\n## |\n---|$)/;
@@ -302,14 +271,12 @@ function syncAcceptanceCriteria(planContent, status) {
     return planContent;
   }
 
-  const acceptanceSection = match[0];
-  let updatedSection = acceptanceSection;
-
-  if (status === 'completed' || status === 'done') {
-    updatedSection = acceptanceSection.replace(/^- \[ \]/gm, '- [x]');
-  } else if (status === 'open' || status === 'planning') {
-    updatedSection = acceptanceSection.replace(/^- \[x\]/gm, '- [ ]');
+  if (normalizeStatus(status) !== 'done') {
+    return planContent;
   }
+
+  const acceptanceSection = match[0];
+  const updatedSection = acceptanceSection.replace(/^- \[ \]/gm, '- [x]');
 
   return planContent.replace(acceptanceRegex, updatedSection);
 }

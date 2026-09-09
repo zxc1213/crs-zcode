@@ -111,48 +111,10 @@ export async function trackDocuments(baseDir, reqPath) {
   }
 }
 
-/**
- * 添加文档并自动更新元数据
- * @param {string} baseDir - 基础目录
- * @param {string} reqPath - 需求目录路径
- * @param {string} docName - 文档名称
- * @param {string} content - 文档内容
- * @returns {Promise<void>}
- */
-export async function addDocument(baseDir, reqPath, docName, content) {
-  // 文档名只取基础名，且目标必须落在需求目录内，防止越界写入
-  const safeName = path.basename(String(docName));
-  const root = path.resolve(reqPath);
-  const docPath = path.resolve(root, safeName);
-  if (docPath !== root && !docPath.startsWith(root + path.sep)) {
-    throw new Error(`document path escapes requirement directory: ${docName}`);
-  }
-  await fs.writeFile(docPath, content, 'utf-8');
-  await trackDocuments(baseDir, reqPath);
-}
-
-/**
- * 获取文档变化摘要
- * @param {string} reqPath - 需求目录路径
- * @returns {Promise<string>} 变化摘要
- */
-export async function getDocumentSummary(reqPath) {
-  const documents = await scanDocuments(reqPath);
-
-  if (documents.length === 0) {
-    return '暂无文档';
-  }
-
-  const summary = documents.map((doc) => `  - ${doc}`).join('\n');
-  return `文档列表 (${documents.length}):\n${summary}`;
-}
-
 export default {
   scanDocuments,
   scanSubDocuments,
   isDocumentFilled,
   scanSubDirectoryStatus,
   trackDocuments,
-  addDocument,
-  getDocumentSummary,
 };

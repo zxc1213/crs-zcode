@@ -53,7 +53,7 @@
 | `metrics/` | 度量收集与导出 |
 | `sync-version.js` | package.json → 插件清单版本同步 |
 
-已移除的死代码：v1.1 移除 `optimization/`（自我优化实验，~1300 行零引用）、`conversation-logger/`（与 ZCode 记忆类插件重叠）、`demo.js`；v1.3 移除 `skill-adapters/`（6 文件）与 `core/skill-interface.js`（"生成提示词再由 LLM 执行"的 Claude 时代遗产，约 1100 行零生产引用）。
+已移除的死代码：v1.1 移除 `optimization/`（自我优化实验，~1300 行零引用）、`conversation-logger/`（与 ZCode 记忆类插件重叠）、`demo.js`；v1.3 移除 `skill-adapters/`（6 文件）与 `core/skill-interface.js`（"生成提示词再由 LLM 执行"的 Claude 时代遗产，约 1100 行零生产引用）；v1.4 移除 `features/similarity.js`（查重职责由知识图谱承担）、`utils/skills-health.js`、`integrations/git.js` 及若干零引用导出（约 900 行）。
 
 依赖（运行时）：`chalk`、`cli-table3`、`fuse.js`、`js-yaml`。引擎不依赖任何平台 API，Node >= 18 可跑。
 

@@ -11,6 +11,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import yaml from 'js-yaml';
+import { TYPE_PREFIXES, TYPE_DIRS } from '../core/schema.js';
 
 /**
  * design_change 关键词兜底匹配
@@ -121,20 +122,12 @@ export async function detectDesignChange(reqDir) {
  * @returns {Promise<object|null>}
  */
 export async function summarizeSingleDesign(baseDir, reqId) {
+  // 前缀 → 类型 → 目录，口径来自 schema 唯一定义
   const prefix = reqId.split('-')[0];
-  const prefixToType = {
-    FEAT: 'feature',
-    BUG: 'bug',
-    QUES: 'question',
-    ADJU: 'adjustment',
-    REF: 'refactor',
-    DEBT: 'tech-debt',
-  };
-  const type = prefixToType[prefix];
+  const type = Object.entries(TYPE_PREFIXES).find(([, p]) => p === prefix)?.[0];
   if (!type) return null;
 
-  const typeDir = type === 'tech-debt' ? 'tech-debt' : `${type}s`;
-  const reqDir = path.join(baseDir, '.requirements', typeDir, reqId);
+  const reqDir = path.join(baseDir, '.requirements', TYPE_DIRS[type], reqId);
 
   try {
     await fs.access(reqDir);
